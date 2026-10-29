@@ -1,0 +1,1719 @@
+[00:00:05] Hello, everyone, and welcome to lecture 2 of CME 295.
+[00:00:11] So today is an exciting day because we'll
+[00:00:14] be talking about large language models,
+[00:00:17] and in particular, how they relate to the transformer
+[00:00:20] architecture that we saw last lecture.
+[00:00:24] But before we start, we will recap what we saw last time.
+[00:00:29] And we will do that at every lecture
+[00:00:31] to see how this connect to what we'll see today.
+[00:00:34] So if you remember, last time we were wondering
+[00:00:39] how models could process text.
+[00:00:42] So models, they don't understand text
+[00:00:44] as it is, they understand numbers.
+[00:00:47] So if you remember, one thing that we looked at
+[00:00:49] was, first of all, how to divide our text into indivisible units.
+[00:00:55] And this process is called tokenization.
+[00:00:58] And we saw a few kinds of tokenization algorithms.
+[00:01:02] And we said that the most common tokenization algorithm
+[00:01:06] these days is the subword tokenization because it
+[00:01:10] has a nice trade-off between the vocabulary
+[00:01:14] that it was building and the sequence length
+[00:01:18] that input text would have.
+[00:01:21] But this was not it, because once you
+[00:01:23] divide a text into tokens, the next step
+[00:01:27] is to compute embeddings.
+[00:01:29] So if you remember, we saw Word2Vec as a way
+[00:01:33] to compute embeddings, but they were not aware of the context.
+[00:01:37] So then we talked about another class of models that were very
+[00:01:41] popular in the 2010s which is called RNNs,
+[00:01:45] Recurrent Neural Networks.
+[00:01:48] And then what we said was, OK, the problem
+[00:01:51] is that you tend to forget things
+[00:01:55] that happened in the past.
+[00:01:57] And so in 2017, there was this landmark paper called "Attention
+[00:02:03] is All You Need" that actually dropped the principle
+[00:02:07] of recurrence and had direct connections in order to compute
+[00:02:13] meaningful representation of tokens.
+[00:02:17] So we spent a little bit of time on some notations.
+[00:02:21] So if you remember, we had query, key, and value,
+[00:02:26] which were useful for us to know OK,
+[00:02:28] given a token, what other tokens should that token attend to?
+[00:02:35] And we saw that the architecture that the authors introduced
+[00:02:39] was called the transformer, and that the attention operation
+[00:02:44] that is here is actually something
+[00:02:47] that is happening in the multi-head attention
+[00:02:50] layers, which are present in the encoder and the decoder.
+[00:02:56] And what we said was that this architecture was first developed
+[00:03:01] in the context of machine translation,
+[00:03:04] in that in that context, that model performed really well.
+[00:03:11] So a natural question is, well, given
+[00:03:14] that this architecture performs really, really
+[00:03:16] well for machine translation, can we actually propagate
+[00:03:21] the gains to other domains?
+[00:03:25] And so this is what we're going to see in the first part.
+[00:03:29] So we're going to talk about different variants
+[00:03:32] of the original transformer architecture, such
+[00:03:36] that it was possible to apply it to other domains.
+[00:03:41] So if you recall, the transformer
+[00:03:44] is composed of two main parts.
+[00:03:47] The first part is the encoder, which is
+[00:03:50] on the left side of the figure.
+[00:03:53] And the goal of the encoder is to compute meaningful embeddings
+[00:03:59] of your input text.
+[00:04:02] So here it was in the context of machine translation.
+[00:04:04] So input text, you can think of it as the source text
+[00:04:07] that you want to translate.
+[00:04:10] And then you had a second part on the right side, which
+[00:04:12] is the decoder whose goal is to actually generate the output one
+[00:04:20] token at a time in an autoregressive manner.
+[00:04:25] And the way it does that is by attending
+[00:04:28] to all the tokens that it has predicted so far,
+[00:04:33] plus the meaningful embeddings from the input that
+[00:04:37] were computed by the encoder.
+[00:04:41] So that was the original transformer.
+[00:04:43] So a very natural question is, well,
+[00:04:46] how about we try to play with the architecture?
+[00:04:50] We try to see, well, what happens
+[00:04:53] if we only take the encoder?
+[00:04:56] Let's suppose we only take the encoder.
+[00:04:58] Can we do something with it?
+[00:05:01] Well, this is something that people have tried shortly
+[00:05:05] after the transformer came out in 2018 with a very important
+[00:05:10] paper called BERT, which stands for Bidirectional Encoder
+[00:05:16] Representation from Transformers.
+[00:05:19] So the idea is to take only the encoder parts of the transformer
+[00:05:28] and to leverage the multi-head attention layer which
+[00:05:34] performs the self-attention operation over all of its inputs
+[00:05:39] in order to have all the input tokens attend to one another.
+[00:05:47] And so here what they say is, well,
+[00:05:50] if you do that and if you introduce a special token--
+[00:05:54] and here the special token is on the left side of the sequence
+[00:05:58] called CLS token.
+[00:06:00] So it's a classification token.
+[00:06:02] Then what you could do is rely on the meaningful encoded
+[00:06:09] embedding corresponding to the CLS token
+[00:06:13] in order to know what the input sequence is about.
+[00:06:18] Because here the encoder is doing self-attention
+[00:06:22] across all the tokens.
+[00:06:24] So the meaningful embedding that is
+[00:06:27] corresponding to the CLS token has interacted
+[00:06:31] with all other tokens.
+[00:06:35] So the idea of BERT is to say if you have some input text, then
+[00:06:42] what I can do is to compute a meaningful representation
+[00:06:47] of the input and then use that representation
+[00:06:51] for some downstream task.
+[00:06:54] So at the time we had something like sentiment extraction
+[00:06:57] as a very common task.
+[00:06:59] So is this tweet positive or not?
+[00:07:01] So typically what you could do is
+[00:07:03] take that embedding and then project that onto that class.
+[00:07:07] That's one example.
+[00:07:08] But then you could also take the embedding of a given token,
+[00:07:12] and then try to determine if that token is
+[00:07:15] corresponding to let's say, a noun or a verb and so on.
+[00:07:22] So that's the idea.
+[00:07:24] Does that make sense?
+[00:07:27] OK, great.
+[00:07:29] So now the next question is, how do you actually
+[00:07:32] train such a model?
+[00:07:34] Well, this is done in two steps.
+[00:07:37] The first step is called pre-training.
+[00:07:41] And the goal is for the model to understand how text is written.
+[00:07:48] And so the way you do that is with some proxy tasks.
+[00:07:52] So if you remember, a proxy task is a task that is not really
+[00:07:56] your end goal, but that is a way for you
+[00:07:59] to achieve something else.
+[00:08:01] And for us, this something else here
+[00:08:03] is the model understanding text.
+[00:08:08] So the first proxy task that this model is trained with
+[00:08:12] is called Masked Language Modeling, MLM.
+[00:08:18] And the idea is for the model to understand
+[00:08:24] how tokens are placed.
+[00:08:27] And so the way it does that is it takes the input text
+[00:08:31] and then it corrupts it randomly.
+[00:08:34] So the way it does that is it selects some tokens at random
+[00:08:39] and it masks them.
+[00:08:41] So actually, it's a little bit more
+[00:08:42] complicated to not introduce biases.
+[00:08:45] But the idea is to corrupt the input sequence.
+[00:08:51] And the idea is to compute meaningful embeddings
+[00:08:57] corresponding to these corrupted tokens in order
+[00:09:02] to try to predict the actual token-- the original token
+[00:09:08] that was before that corrupted token.
+[00:09:13] So here, as an example, if we take
+[00:09:14] a cute Teddy Bear is reading and let's suppose we corrupt cute
+[00:09:17] and we corrupt reading, then here
+[00:09:21] our goal could be to compute a meaningful representation
+[00:09:24] of these corrupted tokens and try
+[00:09:28] to predict the original token.
+[00:09:32] And what the model will try to do
+[00:09:35] is to rely on all the attention mechanism
+[00:09:39] that it is performing in order to deduce
+[00:09:44] what the original token was from the context.
+[00:09:50] So in other words, the model is trying
+[00:09:53] to understand how language is written
+[00:09:55] and trying to understand, what are
+[00:09:57] the words that are likely to be in places where it is missing?
+[00:10:02] So that's the first proxy task.
+[00:10:04] And then there's a second proxy task that the authors of BERT
+[00:10:08] have also tried, which is called NSP, which stands
+[00:10:12] for Next Sentence Prediction.
+[00:10:16] And the idea behind that proxy task
+[00:10:19] is for the model to understand how sentences are sequenced.
+[00:10:28] So here the idea is to have two different sentences as input,
+[00:10:33] and to ask the model if these two sentences actually
+[00:10:37] follow each other or not.
+[00:10:40] So in practice, what you would do is you would look at a text
+[00:10:43] and take two sentences that follow each other, put it there,
+[00:10:47] try to predict that it is indeed following.
+[00:10:49] And then two sentences that are not following each other
+[00:10:52] and you need to predict that it's not following.
+[00:10:55] And the idea behind that proxy task
+[00:10:59] is for the model to learn text, not at the sentence level,
+[00:11:04] but at the document level.
+[00:11:08] So that's the first step called pre-training.
+[00:11:11] And at that stage, you're assuming that your model now
+[00:11:15] understands text much better.
+[00:11:19] And that's why you can go to the second task.
+[00:11:22] So by the way, the first task is typically very expensive,
+[00:11:25] something you do just once, train on a bunch of data.
+[00:11:29] And then the second task is for you
+[00:11:33] to adapt your model to the specific use case
+[00:11:36] that you're interested in.
+[00:11:38] So if we take the example of sentiment extraction, which
+[00:11:42] is trying to predict if a sentence is,
+[00:11:46] let's say, positive or negative, what you would do
+[00:11:50] is have some projection layer that takes in the CLS token that
+[00:11:58] is carrying all the information from the sentence
+[00:12:03] and project it onto the class--
+[00:12:05] the classes of interests which are positive or negative.
+[00:12:10] And for that, you need to have a small set of labels.
+[00:12:16] So you need the observations with actual labels.
+[00:12:19] And then what you would do is to tune the weights,
+[00:12:22] so that you can actually project that meaningful representation
+[00:12:26] onto the space of interest.
+[00:12:31] So what are the pros and cons of this approach?
+[00:12:33] So the pro is, well, it led to pretty good performance.
+[00:12:38] The other thing is it is relying on the self-attention mechanism.
+[00:12:43] So you have connections from both sides, which is actually
+[00:12:47] the reason why BERT is called that way,
+[00:12:49] because it's Bidirectional Encoder Representation
+[00:12:53] from Transformers.
+[00:12:55] Another pro is, well, you need to do fine tuning,
+[00:12:58] but you don't need that much data typically or of 100.
+[00:13:04] But the con is, well, you need a small amount of data
+[00:13:08] to do the fine-tuning, but you need to do the fine-tuning.
+[00:13:10] So in itself, that's an effort.
+[00:13:13] So that's a con.
+[00:13:15] And then the other con is when you look at this model,
+[00:13:20] you may be wondering, well, how can I generate text?
+[00:13:26] And it's something that is not obvious.
+[00:13:29] But actually, we will see in lecture 8
+[00:13:33] that it is actually possible to generate text
+[00:13:36] with an encoder only model.
+[00:13:39] But for now, let's suppose there's no obvious way.
+[00:13:43] But more on that in lecture 8.
+[00:13:47] Cool.
+[00:13:50] So that's for encoder only model.
+[00:13:53] Well, going back to the transformer architecture,
+[00:13:56] we tried removing the decoder, only going with the encoder.
+[00:14:00] That's what we obtained.
+[00:14:01] Now how about we remove the encoder
+[00:14:04] and we try with just the decoder?
+[00:14:07] Well, let's just try that.
+[00:14:09] Well, actually, people have tried that roughly
+[00:14:13] at the same time as BERT was published.
+[00:14:16] There was another branch of transformer variants
+[00:14:19] which were actually focusing on decoder only transformers.
+[00:14:24] And this is the example of GPT, which
+[00:14:27] I'm sure you have heard plenty of times,
+[00:14:29] which stands for Generative Pre-trained Transformer.
+[00:14:34] And the idea is to only keep the decoder parts of the transformer
+[00:14:41] and formulates any task you have as a text-to-text problem.
+[00:14:50] So what does that mean?
+[00:14:52] That means you have some text as input
+[00:14:55] and your only job is to predict the next token.
+[00:14:58] So here beginning of sequence A, A, teddy, teddy bear,
+[00:15:06] is, reading, and so on.
+[00:15:10] So by the way, this kind of decoding
+[00:15:12] is called autoregressive decoding because you
+[00:15:15] predict tokens one at a time.
+[00:15:18] And this is the idea behind GPT.
+[00:15:20] So you don't need to do-- you don't necessarily
+[00:15:24] need to do any fine-tuning because your model is already
+[00:15:28] equipped to be adapted to any use case.
+[00:15:33] So I'll give you an example.
+[00:15:35] The sentiment extraction.
+[00:15:36] So let's assume you have a tweet you want to categorize
+[00:15:40] as positive or negative.
+[00:15:43] Well, you would just put into your model,
+[00:15:46] is this sentence positive or negative?
+[00:15:49] And then you put the sentence.
+[00:15:51] And then the model would just respond positive or negative.
+[00:15:56] You don't need to do fine-tuning,
+[00:15:58] unless you want to make your model even better.
+[00:16:01] So fine-tuning is not a required step, which
+[00:16:06] is already pretty appealing.
+[00:16:11] But you may be wondering, well, last time we
+[00:16:16] saw the encoder-decoder architecture,
+[00:16:19] the original transformer, which was also generating text.
+[00:16:22] Well, what is the difference between this new decoder
+[00:16:25] only model with the encoder-decoder model?
+[00:16:29] Well, so both are similar in that they can generate text
+[00:16:36] autoregressively.
+[00:16:38] But in the case of the encoder-decoder architecture,
+[00:16:42] the input has a special treatment.
+[00:16:47] It is input into the encoder, and within that encoder,
+[00:16:52] all the tokens are able to interact with one another.
+[00:16:57] So it's like pure self-attention.
+[00:17:00] Whereas in the decoder only architecture,
+[00:17:03] what you have as input, the tokens
+[00:17:06] can only interact between themselves and tokens
+[00:17:11] before them.
+[00:17:12] They cannot interact with tokens after them.
+[00:17:16] So you have causal attention for decoder only,
+[00:17:20] but you have bidirectional attention for encoder-decoder
+[00:17:24] for the input.
+[00:17:27] That's the first difference.
+[00:17:29] The second difference is that, well, you have an extra encoder
+[00:17:35] and you need to have some special care for the input.
+[00:17:40] You're treating it differently, so it may make sense
+[00:17:43] for things like machine translation
+[00:17:45] because, well, you have source texts as inputs
+[00:17:49] and you want to have target text as outputs.
+[00:17:53] But things like text generation, it's not super clear
+[00:17:57] what should be as input.
+[00:18:01] So in other words, decoder only is a little bit more general
+[00:18:05] because it treats everything the same.
+[00:18:10] So people have tried both approaches
+[00:18:14] when it came to the text-to-text paradigm,
+[00:18:18] and overwhelmingly they all pretty much
+[00:18:21] went with the decoder only.
+[00:18:24] So what I want you to remember is
+[00:18:26] that people have tried all different variants.
+[00:18:30] And in particular when it comes to generating texts,
+[00:18:34] there was both these paradigms.
+[00:18:36] But the decoder only one is the one that
+[00:18:41] actually lived through today.
+[00:18:44] And one of the reasons is, well, it's simpler
+[00:18:46] and there is no special treatment of the inputs.
+[00:18:49] And yeah, you don't need to have an encoder
+[00:18:52] to treat the input separately.
+[00:18:55] So overall, there are two paradigms.
+[00:18:58] Either you compute meaningful embeddings
+[00:19:00] and you try to fine-tuning for your use case,
+[00:19:03] or you frame it as a text to text problem.
+[00:19:06] And you can frame all problems as text-to-text problems.
+[00:19:10] Another question is, is it efficient?
+[00:19:11] It's another question.
+[00:19:12] But you can do that.
+[00:19:14] And that's what people have been doing so far.
+[00:19:22] Cool.
+[00:19:23] Well, as I mentioned, people went
+[00:19:28] with the decoder only architecture, and what they did
+[00:19:30] was just to scale that up, because they
+[00:19:33] have seen that it was performing better and better.
+[00:19:36] And in particular, in the early 2020s,
+[00:19:40] there were a couple of papers that actually quantified how
+[00:19:44] much better your model was getting as you were training it
+[00:19:49] on more data, with more parameters, with more compute.
+[00:19:55] And we'll see that now.
+[00:19:57] So this paper from 2020 is actually
+[00:20:02] saying that you can actually have almost like a law that
+[00:20:09] tells you how much better your model will
+[00:20:12] get as a function of the number of tokens
+[00:20:16] that you're training on.
+[00:20:18] So it's the middle chart, and as a function
+[00:20:21] of how big your model is, which is the rightmost chart.
+[00:20:28] And so that's the reason why in 2020, 2021, 2022,
+[00:20:32] people have been increasing model size
+[00:20:36] and training it on more tokens like increasingly.
+[00:20:40] And not only that, the authors also
+[00:20:45] saw that the bigger your model, the more token efficient
+[00:20:50] they were as well.
+[00:20:52] So what does that mean?
+[00:20:54] That means that if you have a bigger model,
+[00:20:58] you need a fewer amount of tokens
+[00:21:01] to train on in order to reach a certain performance.
+[00:21:06] So on the slide, so what are all these colors?
+[00:21:09] So on the y-axis, it's the Tesla's.
+[00:21:11] So it's the performance of your model.
+[00:21:13] The lower the better.
+[00:21:15] And then the x-axis is the number
+[00:21:17] of tokens that were processed as part of the training.
+[00:21:22] And so the beautiful colors, they're
+[00:21:24] saying that the brighter you are,
+[00:21:30] the bigger your model is, the more it tends to have a better
+[00:21:35] performance earlier.
+[00:21:38] So that's why we're saying that bigger models are also
+[00:21:41] more token efficient.
+[00:21:43] They need fewer training tokens to perform better.
+[00:21:48] But as you can imagine, well, hardware is limited.
+[00:21:53] You don't have infinite compute.
+[00:21:55] So very naturally, you're wondering, well,
+[00:21:58] if I have a certain compute budget,
+[00:22:01] how much should I scale my model in size?
+[00:22:05] And how much should I attribute that to the number of tokens
+[00:22:08] I should train it on?
+[00:22:11] So before we talk about this, I want to introduce some notations
+[00:22:14] that I think maybe you have seen,
+[00:22:16] but I want to make sure we're all on the same page.
+[00:22:19] So the first one is FLOPs, which stands for Floating Point
+[00:22:24] Operations.
+[00:22:25] And please note the little S, lowercase S. So this
+[00:22:28] is a unit that is meant to measure compute.
+[00:22:33] So the higher the FLOPs, the more compute you actually have.
+[00:22:38] So order of magnitude, so training FLOPs for LLMs
+[00:22:41] is like 10 to the power of 25.
+[00:22:44] But you may see another FLOPS out there.
+[00:22:47] So FLOPS with a capital S or even /S.
+[00:22:51] And that one is actually the compute speed.
+[00:22:55] And it's actually a measure of how performant your hardware is.
+[00:23:00] It is different compared to the previous FLOPs,
+[00:23:03] but it's easy to get mixed up.
+[00:23:05] So just wanted to call that out.
+[00:23:08] So with that said, back to what we were saying.
+[00:23:12] So we live in a world where we don't have unlimited compute,
+[00:23:16] or at least not yet.
+[00:23:18] So given the amount of compute that you have available,
+[00:23:22] a natural question that you have is,
+[00:23:25] how much should I increase my model size?
+[00:23:28] Versus how much should I increase the training size
+[00:23:33] on which I'm training my model?
+[00:23:36] And so there is this paper that came out
+[00:23:38] in 2022 which exactly asked this question.
+[00:23:44] And what it found was actually pretty interesting.
+[00:23:47] It found that there was actually a sweet spot between model size
+[00:23:53] and training data size.
+[00:23:57] And it also found that most models at the time in 2022
+[00:24:01] were actually undertrained, meaning
+[00:24:05] that they were too big for the amount of tokens
+[00:24:10] that they were trained on.
+[00:24:11] They were undertrained.
+[00:24:14] And so it actually also showed that by training two models.
+[00:24:18] So one, which was, I believe, 70 billion parameters
+[00:24:22] and another one 200 and something billion parameters,
+[00:24:26] so higher than the previous one.
+[00:24:28] And it had the same compute budget for the two.
+[00:24:32] So the first one, given it's smaller in model size,
+[00:24:36] it trained it on more tokens.
+[00:24:39] I believe it trained it on $1.4 trillion tokens.
+[00:24:43] And the second one, which was bigger in size,
+[00:24:45] it trained it on fewer tokens because it
+[00:24:47] was the same compute budget.
+[00:24:49] And it showed that the smaller model in terms of size
+[00:24:54] was actually more performant.
+[00:24:57] So they had some relationship between number of parameters
+[00:25:01] and number of tokens that you are training it on,
+[00:25:04] which was something like one parameter for 20 tokens.
+[00:25:10] And so this was quite important.
+[00:25:12] A lot of people tried to go back and see OK,
+[00:25:15] is my model compute optimal?
+[00:25:18] So yeah, so this is also pretty important paper.
+[00:25:23] Another question you can ask yourself--
+[00:25:25] I mean, just trying to think beyond this paper
+[00:25:28] is what your use case is.
+[00:25:30] Because here we're talking about training compute optimal.
+[00:25:35] But you also need to serve your model production.
+[00:25:41] So if you serve it with many, many requests,
+[00:25:45] you also have an incentive to not have it be too big.
+[00:25:50] But that's another question.
+[00:25:52] But I just want to put it out.
+[00:25:54] Yeah.
+[00:25:56] So the question is, is it the cross-entropy loss?
+[00:25:58] And the answer is yes, because your task
+[00:26:00] is next token prediction.
+[00:26:02] And what you're trying to do is have
+[00:26:06] your prediction be as close as the label, which
+[00:26:09] is the next token.
+[00:26:10] And yes, cross-entropy is typically the one that you use
+[00:26:13] and it's the one that is here.
+[00:26:16] Yeah.
+[00:26:19] So the question is, does the quality of the data matter?
+[00:26:22] I would say there are many papers that
+[00:26:24] came out from this, many with different conclusions.
+[00:26:29] I would say for pre-training, what matters is
+[00:26:31] the size more than the quality.
+[00:26:34] We will see in lecture 3 that next steps of the training
+[00:26:39] process matters, there's more importance towards quality
+[00:26:43] and we will see that.
+[00:26:46] OK, cool.
+[00:26:49] OK, moving on to LLM.
+[00:26:51] So why do we call LLM, LLM?
+[00:26:54] Well LLM stands for Large Language Model.
+[00:26:59] So language model is, because it's
+[00:27:01] a model that associates some probabilities to sequences
+[00:27:06] of tokens.
+[00:27:07] So in this case, it's a model that tries
+[00:27:10] to predict the next token.
+[00:27:12] So we're trying to put some probability towards what
+[00:27:16] the next prediction is.
+[00:27:19] And why is it large?
+[00:27:20] Well, it is large because the model size is large, typically
+[00:27:23] in the billions, even tens of billions or hundreds of billions
+[00:27:27] and even trillions.
+[00:27:30] Training data, also hundreds of billions of tokens.
+[00:27:33] At least nowadays, it's also on the tens of trillions of tokens.
+[00:27:37] And also compute.
+[00:27:38] You need a lot of GPUs.
+[00:27:41] And as I mentioned, nowadays people
+[00:27:46] rely on the decoder only transformer,
+[00:27:49] which is the original transformer without the encoder.
+[00:27:55] Well, you may ask me, well, if you look into the decoder,
+[00:28:01] you actually have a component, which
+[00:28:04] is the cross-attention that takes
+[00:28:07] in the meaningful embeddings from the encoder with the ones
+[00:28:13] coming from the decoder.
+[00:28:14] And you're like, OK, what is happening with that components?
+[00:28:16] Well, you also remove it.
+[00:28:18] So the decoder is not exactly the decoder.
+[00:28:20] You also remove the part that is interacting
+[00:28:24] and you obtain this very simple backbone,
+[00:28:29] which is a causal multi-head attention layer, which is only
+[00:28:34] attending to each token and the tokens that
+[00:28:37] came before it and a feed forward neural network, which
+[00:28:42] is where the compute happens.
+[00:28:47] Cool.
+[00:28:49] OK.
+[00:28:50] So what we saw here is the bigger your model size,
+[00:28:55] the better your performance.
+[00:28:57] And we saw that there was also a trade-off between the number
+[00:29:00] of tokens you were training it on
+[00:29:02] and the model size that you were having.
+[00:29:05] A natural question could be, when you have an input
+[00:29:11] x into your model, if your model is huge,
+[00:29:16] then that means that there are a lot of computations happening
+[00:29:19] in that model.
+[00:29:21] A natural question can be do you really
+[00:29:24] need all the parameters in your model for that given input x?
+[00:29:31] Do you really need that?
+[00:29:34] And I want to motivate this observation
+[00:29:37] with another observation.
+[00:29:40] So let's assume I'm here in a room full of people.
+[00:29:44] And let's say I have a math question.
+[00:29:47] Let's suppose you all are coming from different backgrounds.
+[00:29:50] So let's assume you're a math expert.
+[00:29:52] Let's assume you're a physics expert, biology expert.
+[00:29:55] And I'm coming with my math question.
+[00:29:59] Should I ask everyone?
+[00:30:00] Should I only ask you?
+[00:30:03] And this is exactly the kind of question
+[00:30:05] that people have asked themselves.
+[00:30:08] How about we actually only activate
+[00:30:14] a subset of the model for given inputs as opposed
+[00:30:18] to all parameters?
+[00:30:22] And so if you were to do that, then you
+[00:30:24] could scale your model in size, but not
+[00:30:28] incur the cost of having to go through all these operations
+[00:30:34] for every forward pass?
+[00:30:37] So how about you did that?
+[00:30:39] Well, it turns out there's a type of model out there
+[00:30:43] that was actually predating LLMs, which
+[00:30:46] is called a mixture of experts.
+[00:30:49] So who has heard of mixture of experts?
+[00:30:52] Yes.
+[00:30:52] OK, great.
+[00:30:54] So what is the idea behind mixture of experts?
+[00:30:56] So you have experts.
+[00:30:58] So think of it as your math expert,
+[00:31:00] physics experts, et cetera.
+[00:31:02] And then you have a gate, also called a router,
+[00:31:08] that tries to figure out, given your input, which expert should
+[00:31:14] you use and to what extent?
+[00:31:18] So for instance, you have some input x
+[00:31:21] and you're passing it through your gate or your router.
+[00:31:24] And the router says OK, expert 2,
+[00:31:26] so this is a math question I should ask you.
+[00:31:31] So there are several kinds of Mixture of Experts or MoEs.
+[00:31:38] One first kind is called a dense MoE.
+[00:31:41] A dense MoE, what does it do?
+[00:31:43] It still activates all the experts,
+[00:31:46] but it gives more weight towards experts
+[00:31:49] that are maybe more relevant.
+[00:31:51] So, for instance, the math question
+[00:31:53] could be high weight for the math expert, maybe lower
+[00:31:56] weight for the physics expert, but maybe a very small weight
+[00:31:59] for the biology experts.
+[00:32:03] So the bad thing with the dense MoE
+[00:32:07] is you still activate all the parameters.
+[00:32:09] It's not what you want to do.
+[00:32:10] So that's why, in the context of LLMs,
+[00:32:15] the kind that is actually very interesting
+[00:32:17] is actually not the dense MoE, it's
+[00:32:19] the sparse MoE, which is the kind of ammo that actually
+[00:32:25] selects experts that should be activated
+[00:32:30] and that ignores all the other experts.
+[00:32:35] This is the sparse MoE.
+[00:32:37] So typically you have top k experts that were selected.
+[00:32:41] So k can be equal to 1, can be equal to 2 to some number
+[00:32:45] that you fix.
+[00:32:48] And the output that you get, so y hat is the sum of the expert
+[00:32:54] output weighted by how important they are,
+[00:32:58] which is given by the gates.
+[00:33:01] And it's only a sum over some experts that were activated--
+[00:33:06] so k experts, not all experts.
+[00:33:11] Cool.
+[00:33:11] Well, OK.
+[00:33:12] All that is great.
+[00:33:13] But now let's go back to reality.
+[00:33:15] Let's go back to our LLM.
+[00:33:16] If you remember, it's a decoder only architecture.
+[00:33:20] So we have this as a backbone.
+[00:33:23] So I have a question for you.
+[00:33:26] Where would you put this mixture of experts scheme
+[00:33:31] in the architecture?
+[00:33:33] Which layer would you put it?
+[00:33:37] Does anyone have any suggestions?
+[00:33:44] Yes.
+[00:33:47] Yep.
+[00:33:48] So the answer here is you can take a token
+[00:33:51] and project it in order to select which expert it is.
+[00:33:54] Yes.
+[00:33:54] So that is actually the role of the router.
+[00:33:57] So here the thing that I'm really interested in
+[00:33:59] is where would you put the whole mixture of experts
+[00:34:03] in all of this?
+[00:34:04] So I'll help you.
+[00:34:05] Oh, yeah.
+[00:34:06] Sorry.
+[00:34:06] Yeah.
+[00:34:08] It's a great answer.
+[00:34:09] So I'll just exactly mention what you said.
+[00:34:12] So the answer would be feedforward neural network,
+[00:34:15] because this is where all the compute typically resides.
+[00:34:19] And yes, I completely agree with you.
+[00:34:22] The multi-head attention layer is actually the place
+[00:34:26] where tokens communicate.
+[00:34:27] It's not where typically you compute meaningful embeddings
+[00:34:31] by projecting it.
+[00:34:33] So you would typically go with the feedforward neural network.
+[00:34:37] So a great answer.
+[00:34:38] And so here what you would do is back to your point,
+[00:34:41] have a router where for a given input,
+[00:34:44] decides which expert to activate.
+[00:34:48] And here the expert would be a feedforward neural network.
+[00:34:54] So yeah, great answer.
+[00:34:58] Sorry.
+[00:34:58] Yeah.
+[00:35:01] So the question is, well, or the remark I would say
+[00:35:05] is that in the attention layer, you have different heads.
+[00:35:09] Why wouldn't you treat heads as experts?
+[00:35:13] So it's a great point.
+[00:35:14] I think, at the end of the day, you can also try that.
+[00:35:19] But speaking of that, we will actually
+[00:35:21] talk about a small variation that people usually
+[00:35:26] do on multi-head attention because, not all heads are
+[00:35:29] as useful.
+[00:35:30] So I'm going to just address your question
+[00:35:32] in about 30 minutes.
+[00:35:35] Yeah, but great point.
+[00:35:37] Yep.
+[00:35:40] So the question is, how does the router know
+[00:35:44] when to activate each expert?
+[00:35:45] So by with the magic of back propagation, magic of learning.
+[00:35:50] So you have a training process and then
+[00:35:53] you want to learn how each component should behave.
+[00:35:58] And you just backpropagate and it just learns that way.
+[00:36:01] And it's actually a great point because one observation
+[00:36:07] you may tell me is, what would prevent
+[00:36:10] your model from overrelying on a specific set of experts
+[00:36:16] and not explore other experts?
+[00:36:20] And so this is actually a problem
+[00:36:23] when training MoE-based LLMs, which
+[00:36:27] is the tendency for your model to rely only
+[00:36:31] on a small set of experts instead of all the experts.
+[00:36:36] And it's called routing collapse.
+[00:36:38] So there are many reasons why it's not good.
+[00:36:40] But one of the reasons is your effective model size
+[00:36:45] is actually smaller than the total number of experts
+[00:36:51] and weights that you have.
+[00:36:52] And this typically occurs, because when
+[00:36:57] you train your model, if some experts get chosen
+[00:37:02] in the very beginning, then when it
+[00:37:05] comes to updating the weights, those experts that
+[00:37:11] were activated in the beginning, they
+[00:37:13] tend to be updated at first.
+[00:37:18] So they tend to get better and better,
+[00:37:20] whereas all the other experts are still sitting there.
+[00:37:24] So it's the problem of the rich getting richer.
+[00:37:28] And so it's for that reason that people have also come up
+[00:37:33] with a part of the last cult, so it's
+[00:37:37] a load balancing auxiliary loss, which
+[00:37:42] is aimed at forcing your model to also incentivize exploring
+[00:37:49] other experts by encouraging the fraction of the tokens that
+[00:37:56] are being rerouted to be uniform or more or less uniform
+[00:38:00] across experts.
+[00:38:02] And so maybe it's something that I didn't say,
+[00:38:04] but I will say it now.
+[00:38:06] The routing is done at the token level.
+[00:38:10] So if you have an input sentence,
+[00:38:12] each token will ask itself, which expert should I go to?
+[00:38:18] So this is done at the token level.
+[00:38:21] And so here this loss is incentivizing your model-- yeah.
+[00:38:29] So the question is, well, if you select one or two,
+[00:38:31] it's not differentiable.
+[00:38:32] It's a great point.
+[00:38:33] So you have an operator that's called stop grad that
+[00:38:37] is treating some aspects as being actually derivative of 0
+[00:38:42] and treating these as constants.
+[00:38:45] So long story short is in the loss,
+[00:38:48] you're treating the fraction of tokens routed to expert i
+[00:38:52] as a constant.
+[00:38:54] And you're only backpropagating through the routing probability.
+[00:38:58] So you're still able to actually change those routers.
+[00:39:02] But yeah, that's a good point.
+[00:39:08] So let me see.
+[00:39:09] So I think we're talking about the fact
+[00:39:12] that these auxiliary loss is incentivizing your model
+[00:39:17] to also choose other experts and not
+[00:39:21] to have this routing collapse problem that we
+[00:39:24] mentioned at the beginning.
+[00:39:27] There are some other problems as well.
+[00:39:28] I just want to just tell you that training an MoE
+[00:39:31] based LLM is challenging, and this is part of its challenge.
+[00:39:38] But the good thing is, if you do it properly, you will have--
+[00:39:44] so here on the slide, what you see
+[00:39:46] is an input text where the color of each section
+[00:39:52] denotes a specific experts that a given token was sent to.
+[00:39:58] And this is, for instance, at a given layer.
+[00:40:00] And this is coming from a paper from Mixtral.
+[00:40:03] So here is the model called Mixtral of experts.
+[00:40:07] And you see that the colors are pretty diverse.
+[00:40:10] So it means that you're actually leveraging your experts pretty
+[00:40:14] well.
+[00:40:17] And so I want to just say a few things about MoE-based LLMs.
+[00:40:22] So now we're in 2026.
+[00:40:23] This is something that I think the paper was
+[00:40:25] from 2024, which is quite some time ago in the AI field.
+[00:40:31] So nowadays, what people do is they use experts,
+[00:40:35] but they also have shared experts
+[00:40:40] that gets activated no matter which experts the router
+[00:40:46] or the gate selects.
+[00:40:48] And the idea behind this is for every token,
+[00:40:51] there is always some computation that is always necessary.
+[00:40:56] And you want to avoid your experts from always learning
+[00:41:00] the same thing as a foundation and then specializing
+[00:41:04] into something.
+[00:41:06] So that is something that people do nowadays.
+[00:41:08] The second thing that people do is the number of experts,
+[00:41:12] they don't choose it to be 8 or 16.
+[00:41:15] They actually choose it to be higher, 60 or in the hundreds.
+[00:41:21] And the reason why they do that is that intuitively, you
+[00:41:27] just give the chance to your experts
+[00:41:29] to be very specialized, very fine-grained.
+[00:41:32] But also on the charts, you see that the performance,
+[00:41:35] when you have more fine-grained experts is just higher.
+[00:41:40] So it's also just empirical.
+[00:41:43] And so speaking of order of magnitudes.
+[00:41:47] So when it comes to the frontier open source LLMs
+[00:41:51] that were published recently.
+[00:41:54] So here the screenshot is actually from a few days ago.
+[00:41:58] If we take the top models, what we see
+[00:42:01] is that-- so there are MoE-based LLMs.
+[00:42:03] And the number of experts that they have
+[00:42:05] is on the order of hundreds.
+[00:42:08] So here are 384, 256.
+[00:42:12] And the number of experts that are
+[00:42:14] activated at each forward pass is typically eight or so.
+[00:42:20] And you also have a shared expert,
+[00:42:22] which is not widely used.
+[00:42:26] Like in this example, the first model is not using it.
+[00:42:30] And in terms of the model size, it
+[00:42:32] is in the hundreds of billions of parameters
+[00:42:35] or even trillion parameter for the first one.
+[00:42:39] So it's pretty big models.
+[00:42:41] Yes.
+[00:42:43] So it's a great question.
+[00:42:45] The question is, does the scaling law still
+[00:42:48] hold true for a MoE-based LLMs?
+[00:42:51] So the answer is that paper was actually based on a dense LLM.
+[00:42:57] It was not like an MoE-based LLM.
+[00:42:59] So one thing that I've seen papers do
+[00:43:03] is have these scaling law experiments
+[00:43:06] for their own setup on small number of tokens, small model
+[00:43:11] size to just see what the law is for the specific setup.
+[00:43:15] So to your question, I think for MoE-based LLMs,
+[00:43:19] if authors feel that their choice, their design
+[00:43:25] is very different from what was tested before, they would just
+[00:43:29] do this very small experiment and see what
+[00:43:32] is the kind of law that comes from there,
+[00:43:35] and then choose the parameters from there.
+[00:43:39] Yep.
+[00:43:42] Yep.
+[00:43:42] So the question is, why is n the number of experts
+[00:43:46] doing in the numerator?
+[00:43:47] So here, actually, what you're doing is
+[00:43:51] you are summing across the experts.
+[00:43:53] And so if you actually write that mathematically,
+[00:43:56] you actually want to add n to--
+[00:44:01] because fi and Pi is like over n, so it's over n squared,
+[00:44:05] times n is like over n.
+[00:44:07] So it's times n.
+[00:44:09] But n is the number of experts.
+[00:44:13] OK, great.
+[00:44:17] We're doing amazing.
+[00:44:18] Any questions, other questions?
+[00:44:24] So far, what did we see?
+[00:44:26] We saw that people have tried different variants
+[00:44:30] of the transformer.
+[00:44:31] They saw OK, how about we take the encoder?
+[00:44:34] Well, OK, you can do this.
+[00:44:35] How about you take the decoder?
+[00:44:37] You treat that as a text-to-text problem.
+[00:44:40] They scale that up.
+[00:44:41] And people have seen that the performance just
+[00:44:44] gets better and better as people increase it
+[00:44:46] in size and in number of tokens that it is trained on.
+[00:44:50] We've seen that when the model is too big,
+[00:44:53] you need to do something in order for you to not
+[00:44:57] have crazy inference costs.
+[00:45:00] And so that's why people have developed a MoE-based LLMs that
+[00:45:04] allow you to scale the number of parameters
+[00:45:07] without having to incur the cost of also activating
+[00:45:11] all the parameters in each forward pass.
+[00:45:15] So here in this part, what we will focus on
+[00:45:18] is a number of changes that people
+[00:45:22] have made in the layers that were originally
+[00:45:28] described in the original transformer architecture.
+[00:45:33] So you will see in a second what I mean.
+[00:45:36] So if you remember, the transformer architecture
+[00:45:41] relies on the self-attention mechanism,
+[00:45:44] which is the idea of letting all your tokens communicate
+[00:45:50] with everyone.
+[00:45:53] So the problem when you do that is
+[00:45:56] that you lose the information of where
+[00:45:58] tokens are positioned because you have these direct links.
+[00:46:03] So if you don't have any information about positions
+[00:46:06] about each of these tokens that are included anywhere,
+[00:46:10] well, you lose the information of where tokens are located.
+[00:46:16] So the original transformer paper tried two approaches.
+[00:46:23] The first was learning position embeddings
+[00:46:27] and adding those embeddings to the token embeddings.
+[00:46:31] So what people would do is you have an input sequence,
+[00:46:36] you have your tokens.
+[00:46:38] Each token is associated with a position index.
+[00:46:42] Let's assume 1, 2, 3, and so on.
+[00:46:45] And here the idea is to learn an embedding that is associated
+[00:46:51] with each position index.
+[00:46:53] So position 1 will have an embedding,
+[00:46:55] position 2 will have an embedding, and so on.
+[00:46:59] And these embeddings would be learned.
+[00:47:02] And what would happen is, in order for your model
+[00:47:06] to actually know about where each of these tokens
+[00:47:11] are located, so if you see on the right, what people would do
+[00:47:15] is take the token embedding and then
+[00:47:19] add that position-specific embedding to the token
+[00:47:23] just to reflect that token is at a very specific position.
+[00:47:29] But the problem with this approach
+[00:47:32] is, as we mentioned last time, that if you train your model
+[00:47:37] on a given length of input data, if you ever
+[00:47:43] come across some sequence at inference time, that is,
+[00:47:48] let's say longer, the problem is actually
+[00:47:52] have never encountered positions beyond the ones
+[00:47:55] that you encountered at training time.
+[00:47:59] So you actually do not know what embeddings for such position
+[00:48:02] are.
+[00:48:03] You don't know.
+[00:48:06] And so that's the reason why the original authors
+[00:48:09] of the transformer paper, they not only tried the learned way,
+[00:48:13] but they also tried a deterministic formula-based way
+[00:48:18] that we're going to see in a second.
+[00:48:21] And the reason why they tried this approach
+[00:48:23] is because it can generalize to any sequence length
+[00:48:31] without having you to actually train on longer sequences.
+[00:48:37] And they actually said that both approaches
+[00:48:39] were roughly leading to the same performance.
+[00:48:42] So the fixed one is better and we're going to see it now.
+[00:48:48] So there was this analogy that I mentioned last time that I will
+[00:48:53] start from in this session.
+[00:48:56] So the idea behind the deterministic formulation
+[00:49:03] is to express each position on a high dimensional vector.
+[00:49:11] And what you want is that vector to exactly inform you
+[00:49:17] in which position you're in.
+[00:49:20] And so you want that.
+[00:49:24] You also want two positions to be embedded,
+[00:49:30] such that the similarity operation between these two
+[00:49:35] embeddings are high if the positions are close
+[00:49:41] and it's low when these positions are far.
+[00:49:44] And so I'm going to just motivate
+[00:49:47] how the authors have actually designed
+[00:49:50] the formula and the design that they're
+[00:49:52] using for the position embedding that they're proposing here.
+[00:49:58] So going through the analogy that we discussed,
+[00:50:01] let's assume you're looking at your watch.
+[00:50:05] You have several hands.
+[00:50:06] You have the hour hand.
+[00:50:08] You have the minute hand.
+[00:50:09] You have the second hand.
+[00:50:12] If you put all these hands together,
+[00:50:14] you know exactly what time it is.
+[00:50:19] And each of these hands, they're moving at different frequencies.
+[00:50:26] So the hour tells you roughly when you are in the day,
+[00:50:28] the minute is a little bit more precise.
+[00:50:30] And then the second is like, even more precise.
+[00:50:33] And so what we're going to do is do
+[00:50:37] something very similar for the position embeddings, where we'll
+[00:50:41] have a function of higher and lower frequency,
+[00:50:49] such that when you put all of that together into one vector,
+[00:50:54] if you know exactly which position you're at.
+[00:50:59] So it's going to get a little bit more into the math.
+[00:51:02] So disclaimer, I hope you remember
+[00:51:05] your trigonometry formula.
+[00:51:06] But if not, don't worry.
+[00:51:08] We'll also look at it together.
+[00:51:10] So let's assume that you are at position m.
+[00:51:16] And so here you're looking at two consecutive indices--
+[00:51:22] so 2i and 2i plus 1.
+[00:51:25] So what the authors propose is to have one be a cosine,
+[00:51:31] the other one be a sine or vice versa,
+[00:51:35] and have the frequency of these functions
+[00:51:40] be a function of the index.
+[00:51:43] So here, if i is low, then you have a higher frequency
+[00:51:49] function.
+[00:51:50] If i is high, you have a lower frequency function,
+[00:51:55] meaning your sine will vary more slowly.
+[00:52:00] So here, if you see on the graph,
+[00:52:02] I'm not sure if you exactly read the axis.
+[00:52:06] So on the right side of the slide,
+[00:52:10] you have on the y-axis the position,
+[00:52:15] and on the x-axis, the dimension.
+[00:52:18] So here what you see is if you take the first row
+[00:52:24] and you're moving down, you're going from position 1
+[00:52:29] to later positions of your sequence.
+[00:52:34] And you see that the first dimensions, the first indices,
+[00:52:37] the one on the left, they tend to vary very quickly,
+[00:52:41] and the one on the right, the later indices,
+[00:52:44] they tend to vary much, much more slowly.
+[00:52:47] So in other words, your lower indices,
+[00:52:50] they're much higher frequency.
+[00:52:53] And the later indices, they are of much lower frequency.
+[00:52:58] So just to tell you that this seemingly scary formula is just
+[00:53:02] telling you this.
+[00:53:03] So it's varying cosine, sine with different frequencies.
+[00:53:07] It's a higher frequency for a lower index, lower frequency
+[00:53:11] for a higher index.
+[00:53:14] So let's assume you note omega i, the huge formula,
+[00:53:19] so that we don't need to worry about it.
+[00:53:21] Well, what happens if you have a position m and a position n?
+[00:53:27] How do you compute the similarity?
+[00:53:29] Well, you take the dot product.
+[00:53:32] So if you remember the way you take
+[00:53:33] the dot product of two vectors is you multiply each dimension
+[00:53:39] and then you add everything up.
+[00:53:43] So just a refresher on trigonometry.
+[00:53:47] So cosine of a minus b is cosine of a cosine
+[00:53:51] of b plus sine of a sine of b just the trigonometry formula.
+[00:53:59] So here if you take the cosine of omega i of m minus n,
+[00:54:06] it's actually the dot product between these two indices.
+[00:54:19] So the question, is i a function of the dimension?
+[00:54:22] Yes.
+[00:54:22] So i is a function of the index.
+[00:54:24] So if you have a lower i, then your omega i
+[00:54:29] will be such that it will be of higher frequency.
+[00:54:33] So yes, it's a function of the index.
+[00:54:36] That's a great question.
+[00:54:37] So here going back to our favorite trigonometric formula,
+[00:54:43] so here I just want to point out that cosine of omega i m minus n
+[00:54:49] is equal to the dot product of these two.
+[00:54:55] And if you actually want to take the dot product of the whole two
+[00:54:59] vectors, you actually obtain a sum
+[00:55:04] of the cosine of the omega i of all the indices multiplied
+[00:55:12] by m minus n.
+[00:55:16] Is everyone following so far?
+[00:55:19] Yeah.
+[00:55:20] So why am I saying this?
+[00:55:22] I'm saying this because the dot product of the two position
+[00:55:26] embeddings at position m and n is a function of m minus n.
+[00:55:32] And you may remember that cosine of 0
+[00:55:38] is the maximum value that cosine can take.
+[00:55:41] So in other words, when m is equal to n,
+[00:55:45] the sum is maximized.
+[00:55:47] So the similarity is maximum.
+[00:55:50] So all of that to say that if you take this expression that
+[00:55:56] is graphically something that you see on the left in terms
+[00:56:00] of the value of the embeddings, what you will obtain
+[00:56:04] is that positions that are close together,
+[00:56:07] they're actually of high similarity and positions that
+[00:56:10] are farther together, they are of lower similarity.
+[00:56:14] And that's what you see on the right.
+[00:56:16] So on the right, you have the positions on the x-axis
+[00:56:21] and on the y-axis of m and n.
+[00:56:24] And you see that when the positions are equal,
+[00:56:28] the similarity is maximum.
+[00:56:32] So all of that to say that if you were to look at the formulas
+[00:56:36] without any context, I think you'd be probably scared.
+[00:56:39] But I hope that with this perspective,
+[00:56:44] it's a little bit less scary.
+[00:56:48] So now what I want to tell you is that if everything was great,
+[00:56:55] we would be using this exact method today.
+[00:56:59] But the truth is we are not.
+[00:57:01] This is actually not something that people use today.
+[00:57:04] People use something differently.
+[00:57:06] And the reason why that is the case is if you think about it,
+[00:57:13] you care about where tokens are positioned
+[00:57:19] in a very specific layer.
+[00:57:21] You only care about it in the attention layer,
+[00:57:25] because the attention layer is the layer where you actually
+[00:57:28] are communicating.
+[00:57:29] You're trying to determine which tokens are relevant when
+[00:57:33] you do your expression.
+[00:57:37] And so this is the reason why people have actually
+[00:57:43] tried to find a method that is not affecting all the layers,
+[00:57:49] but that is being surgically applied to the attention layer.
+[00:57:55] Yeah.
+[00:57:58] So the question is if you do that, then you may make
+[00:58:03] further token interact less.
+[00:58:05] And that was maybe the problem of RNN.
+[00:58:07] So why are we doing this?
+[00:58:08] So here the idea is to inject some position information
+[00:58:13] and intuitively tokens that are farther apart,
+[00:58:18] they're just less relevant.
+[00:58:21] But they're not relevant.
+[00:58:24] And so here the idea is that on a relative sense,
+[00:58:30] closer token are just more likely to be more relevant.
+[00:58:34] But you're still keeping the direct connections,
+[00:58:37] and you're still giving a chance to your model
+[00:58:39] to actually interact with those tokens.
+[00:58:42] So I do get your concern.
+[00:58:45] That being said, this is something
+[00:58:47] that proved to work well, and it just reflects the idea
+[00:58:53] that if let's say you have a 10 document page, then
+[00:58:57] probably what you have in the same sentence
+[00:58:59] is probably more relevant than something that
+[00:59:01] is very far apart, but you're still giving a chance
+[00:59:04] to these tokens to interact.
+[00:59:09] OK, great.
+[00:59:12] So going back to here.
+[00:59:13] So one major drawback of the previous approach
+[00:59:17] is that this position embedding was actually
+[00:59:20] being added to the token embedding, which was then being
+[00:59:25] processed by all the layers.
+[00:59:27] But intuitively, this is actually not what you want,
+[00:59:30] because what you want is to let your attention layer
+[00:59:34] know when two tokens are far apart.
+[00:59:39] But you don't want to let your feedforward neural network know
+[00:59:43] that your token is at position 5 or at position 12
+[00:59:47] because the feedforward neural network doesn't care.
+[00:59:51] Can very well have a sentence where a token is
+[00:59:55] at position 24 versus 1.
+[00:59:59] That can be very making sense just because you
+[01:00:01] have multiple sentences.
+[01:00:05] So this is the reason why people have
+[01:00:08] tried to mitigate this drawback by surgically looking
+[01:00:14] into the attention layers and doing something there.
+[01:00:19] And in particular, I'll go through a few methods
+[01:00:22] that people have tried.
+[01:00:24] So one of them is a method which was meant to learn a bias
+[01:00:30] term within the Softmax.
+[01:00:34] So if you remember in the attention layer,
+[01:00:36] you have this formula which I recommend you remember,
+[01:00:39] which is Softmax of qk transpose over some scaling constant times
+[01:00:45] v.
+[01:00:46] So within the Softmax, you're actually
+[01:00:49] trying to ask yourself how relevant the query is
+[01:00:54] to all the other keys.
+[01:00:56] So this is where that matters.
+[01:00:58] And so here the idea is to learn a bias that
+[01:01:03] is dependent on how far your token m and your token n
+[01:01:11] are by learning a bias.
+[01:01:16] The problem with this is, so similar to the very first
+[01:01:19] method, you need to learn the bias.
+[01:01:22] And so first of all, maybe your training data
+[01:01:25] has some bias in itself.
+[01:01:27] So it will maybe not optimal.
+[01:01:29] But then the second thing is it's not
+[01:01:31] generalizable to all possible distances.
+[01:01:37] So that's why people have tried other methods as well.
+[01:01:40] Another one is called ALiBi-- so Attention with Linear Biases.
+[01:01:44] And so here the idea is to actually make
+[01:01:47] that bias vary as a function of m--
+[01:01:52] sorry, n minus m.
+[01:01:53] So the distance between m and n.
+[01:01:58] But the method that is commonly used nowadays is not ALiBi,
+[01:02:04] is not the T5 bias, it's RoPE.
+[01:02:06] So who has heard of RoPE?
+[01:02:10] Yeah?
+[01:02:10] OK, great.
+[01:02:11] So we're going to see why RoPE is the way it is.
+[01:02:15] So RoPE stands for Rotary Position Embedding.
+[01:02:21] And the idea behind RoPE is in the attention layer,
+[01:02:27] you're not going to add a bias.
+[01:02:29] What you're going to do is you're
+[01:02:31] going to change the query and the key directly.
+[01:02:35] And so how are we going to change them directly?
+[01:02:38] What you're going to do is you're
+[01:02:40] going to rotate your query.
+[01:02:44] You're going to rotate your key, each of them
+[01:02:49] as a function of the position that they're in.
+[01:02:54] And why is it something that is very appealing?
+[01:02:57] Well, because the nice thing is when you rotate the query, when
+[01:03:02] you rotate the key, what you're actually doing, when you do
+[01:03:07] the self-attention formula is you're actually bubbling up
+[01:03:16] an expression that is a function of the difference between n
+[01:03:21] and m.
+[01:03:25] So we're going to see a little bit how that works.
+[01:03:27] So here, so I'm not sure if any of you
+[01:03:29] is an expert at geometry and rotation matrices.
+[01:03:35] But the way you rotate a vector is you take that vector
+[01:03:41] and you actually have a rotation matrix
+[01:03:45] that you apply to that vector.
+[01:03:48] So I'm going to maybe just write that down.
+[01:03:51] If I do have this.
+[01:03:53] So let's suppose you have some vector, let's call it x.
+[01:04:00] So you have, let's say you have two dimensions--
+[01:04:08] let's assume you have x and y.
+[01:04:10] And let's assume that your vector is like this.
+[01:04:17] And this is let's say a radius of r.
+[01:04:22] So here the x-axis is x--
+[01:04:26] sorry, it's R and here you have your theta angle,
+[01:04:32] cosine of theta.
+[01:04:34] And then here you have your y value, which is R sine theta.
+[01:04:42] So let's assume you have this.
+[01:04:48] So what I'm only doing is expressing
+[01:04:51] x as a function of some angle theta that it already has.
+[01:04:56] And what I want to show you is if you
+[01:04:58] were to multiply the rotation matrix with this vector x.
+[01:05:05] So let's assume you have a rotation matrix of let's say
+[01:05:09] angle phi, let's assume, which is-- so I'm going to just copy
+[01:05:14] what is on the slides.
+[01:05:15] So it's cosine of phi is minus sine of phi, sine of phi,
+[01:05:27] and then cosine of phi.
+[01:05:30] So let's assume you actually multiply your rotation matrix
+[01:05:37] with the vector x.
+[01:05:40] So for those of you who love matrix multiplications
+[01:05:45] and trigonometry formulas, this is the best case because I'm
+[01:05:51] going to exactly see.
+[01:05:55] So here you would do the matrix multiplication.
+[01:05:57] So R times cosine of theta cosine of phi
+[01:06:01] minus R cosine of theta--
+[01:06:05] sorry, minus R sine of phi sine of theta.
+[01:06:10] What is this?
+[01:06:10] It's R cosine of theta plus phi.
+[01:06:15] And you guessed it, the other one is the same, but with sine.
+[01:06:30] So why am I writing all of this?
+[01:06:33] What I want to show you is if you multiply
+[01:06:36] your vector with the rotation matrix,
+[01:06:39] you're rotating your vector.
+[01:06:41] And this is the reason why we have this formula written
+[01:06:44] on the slide.
+[01:06:46] And the nice thing is, if you rotate your query vector
+[01:06:52] by some angle as a function of m,
+[01:06:56] and if you rotate your key vector
+[01:07:00] as a function of its position n, then
+[01:07:03] you obtain a rotation matrix that is actually
+[01:07:08] a function of n minus m.
+[01:07:11] So I will spare you the details.
+[01:07:13] But if you just do the multiplication,
+[01:07:16] you will see that it works.
+[01:07:18] And so the reason why it is pretty nice
+[01:07:22] is because this is extensible to any positions.
+[01:07:27] You're not learning anything.
+[01:07:30] And by the way, one other thing I will say is I just showed you
+[01:07:33] the 2D case.
+[01:07:34] But in order to generalize that let's say d-dimensional case,
+[01:07:41] you would actually do that by 2D blocks.
+[01:07:48] And you would do the rotation with angles that
+[01:07:54] are a function of the index.
+[01:07:56] So to your earlier question, so here you
+[01:07:58] would have also angles that would be a function,
+[01:08:03] let's say if it's a lower index, it's
+[01:08:04] a different angle compared to if it's a later index.
+[01:08:11] Cool.
+[01:08:12] And the nice thing with this method
+[01:08:14] is if you take a look at the order of magnitude of the dot
+[01:08:20] product between the query and the key
+[01:08:23] as a function of how far their positions are, then
+[01:08:27] you will see that roughly it tends to decay as m and n
+[01:08:33] are farther apart.
+[01:08:35] So it's not strictly monotonic because, well, it's
+[01:08:40] more complicated than that.
+[01:08:41] But at a very high level, it just decays
+[01:08:45] and it just reflects what we want in tokens
+[01:08:50] that are very far apart.
+[01:08:53] So that was RoPE.
+[01:08:56] So in other words, the original transformer paper
+[01:09:00] used position embeddings that were additive,
+[01:09:04] which is in contrast with nowadays where people use RoPE
+[01:09:09] as a way to encode position.
+[01:09:13] So this is how people use it.
+[01:09:16] And they don't use the additive position
+[01:09:21] that we discussed before.
+[01:09:24] So now we're going to talk about another component that
+[01:09:27] is a little bit different compared
+[01:09:29] to the original transformer, and this one is the attention layer.
+[01:09:34] So I mentioned that in the encoder part,
+[01:09:38] everyone can attend to everyone.
+[01:09:40] In the decoder part, a given token
+[01:09:44] can attend to itself and to tokens before it.
+[01:09:49] So one natural question that people have asked
+[01:09:52] is, well, do you really need to attend
+[01:09:56] to everyone at every layer?
+[01:10:01] Because it's a lot of computations.
+[01:10:04] And the answer is, well, maybe you don't need to do that.
+[01:10:09] And in particular, there is a specific variation
+[01:10:14] that is called the sliding window attention that
+[01:10:18] is actually meant for you to attend to only up
+[01:10:23] to a certain position that is farther away from you.
+[01:10:27] Not everyone, but only up to a certain level.
+[01:10:31] And so here it's something that people also
+[01:10:34] call local attention.
+[01:10:38] And what I want to tell you is you may-- so probably, you
+[01:10:43] will probably come back to me with saying,
+[01:10:44] OK, the RNN actually had this issue.
+[01:10:47] Well, why are you doing this?
+[01:10:48] So I want to point out something that I
+[01:10:53] hope will be making sense.
+[01:10:59] So your model is not just one block.
+[01:11:03] It's not just one block of the decoder.
+[01:11:05] It's actually several blocks.
+[01:11:07] So the attention operation is not just happening once.
+[01:11:12] It is happening several times.
+[01:11:15] So if you have, let's say, a sequence of tokens.
+[01:11:25] So I'm going to just replicate exactly these tokens over here
+[01:11:32] and let's say over here.
+[01:11:37] So let's assume that this token can only
+[01:11:47] interact with itself and with one token from before.
+[01:11:54] Here you only see yourself and the token before.
+[01:11:58] But if you consider that in a similar fashion
+[01:12:02] this token can attend to itself and the token before,
+[01:12:09] well, effectively, this token is able to see representations
+[01:12:15] from tokens that are beyond the limit.
+[01:12:22] Does what I'm saying making sense?
+[01:12:23] Yeah.
+[01:12:24] OK.
+[01:12:24] So in other words, even though you are limiting yourself
+[01:12:31] in the tokens that you're able to interact with,
+[01:12:35] if you have several stacked blocks,
+[01:12:39] then what you're actually able to do
+[01:12:41] is to interact with further tokens.
+[01:12:46] And for those of us who are also familiar with the vision world,
+[01:12:49] so in case you're familiar with convolutional neural networks,
+[01:12:53] it's a little bit the same idea as receptive fields.
+[01:12:58] So here when you perform the convolution,
+[01:13:02] a given element is actually a function of actually many pixels
+[01:13:08] if you go back into the chain.
+[01:13:10] So it's the same idea.
+[01:13:13] OK, I want to tell you something else about the attention layer.
+[01:13:18] So I think we briefly discussed it earlier in the lecture.
+[01:13:23] But OK, I'm going to reuse this.
+[01:13:29] So let's assume that we're back with our decoder
+[01:13:36] only model which is typically what LLMs are composed of.
+[01:13:41] And let's assume that what you want to do
+[01:13:47] is to predict the next token.
+[01:13:50] Well, this is your last predicted token.
+[01:13:53] In order to predict the next token,
+[01:13:55] you have a bunch of layers, but in particular in the attention
+[01:13:57] layer, what you're doing is you're attending to yourself.
+[01:14:01] You're attending to the token before, the token
+[01:14:04] before that, the token before that.
+[01:14:07] Let's assume you predict a new token
+[01:14:11] and that the new token, in order to predict the next token,
+[01:14:13] you're attending to yourself, you're
+[01:14:15] attending to the one before you, and so on and so forth.
+[01:14:21] So every time you want to predict the next token, what
+[01:14:27] you're doing is this causal attention,
+[01:14:32] where you're comparing the query from your token
+[01:14:37] with all the keys from the other tokens.
+[01:14:43] And every time you want to predict a new token,
+[01:14:45] you again compare it to the keys of the previous tokens.
+[01:14:52] So you could either compute all the previous keys every time
+[01:14:59] you do that operation, or you could store the keys
+[01:15:06] as you perform your decoding.
+[01:15:09] So, for instance, when I decode when I'm here,
+[01:15:11] I attend only to myself.
+[01:15:12] I computed the key.
+[01:15:13] You can save the key.
+[01:15:16] You predict this one.
+[01:15:17] So here I attend to here and to the one
+[01:15:20] before-- so I need the key.
+[01:15:21] I can reuse the key.
+[01:15:23] And I compute the key here that I save.
+[01:15:26] And I'm continuing this process so on and so forth.
+[01:15:29] So the problem with this is keys detect memory space.
+[01:15:37] And as your decoding gets longer and longer,
+[01:15:40] you need to store these keys.
+[01:15:43] And so if you remember, the attention layer
+[01:15:45] is actually a multi-head attention layer.
+[01:15:48] So it doesn't only have one key, it
+[01:15:50] has actually several keys for the same layer
+[01:15:53] for the same token.
+[01:15:55] So that is the reason why people have tried saving up
+[01:16:00] the number of keys and the number of values
+[01:16:03] that each token needs to produce.
+[01:16:05] And that's why you have this method.
+[01:16:07] So, for instance, the idea of sharing keys and values
+[01:16:13] across heads.
+[01:16:15] So the reason why people are interested in such methods
+[01:16:18] is because given that you always need the keys in order
+[01:16:23] to predict the next token, you want to save memory in there.
+[01:16:30] And so that is the reason why you have a number of methods
+[01:16:32] like group query attention, which
+[01:16:35] shares the key and the value projection
+[01:16:39] matrices across the heads, or the group query attention
+[01:16:44] which is a little bit more common, where
+[01:16:45] you have a certain number of groups where you share the key
+[01:16:51] and value matrices.
+[01:16:54] And this contrasts with the original multi-head attention
+[01:16:58] layer, which had one heads, where you had all the projection
+[01:17:03] matrices that you had to learn.
+[01:17:07] So all of that to say that given that you
+[01:17:11] are in this situation where you're always saving your keys
+[01:17:17] and your values for tokens that you have decoded
+[01:17:21] in the past, what you want is to not
+[01:17:24] have to save too much of them.
+[01:17:26] You don't want to saturate your memory.
+[01:17:29] So people are trying to find ways to optimize that.
+[01:17:33] And one such way is to just reduce
+[01:17:37] the number of different projection matrices
+[01:17:39] that you need to learn for the keys and the values.
+[01:17:43] And that is the reason why, I mean,
+[01:17:45] no one cares about the query because the query,
+[01:17:47] you use it once and then you don't need that.
+[01:17:52] So does that make sense?
+[01:17:56] So nowadays people use GQA quite a lot.
+[01:17:59] So among everything we've seen, you will see a RoPE quite a lot.
+[01:18:03] You will see local attention with sliding window quite a lot.
+[01:18:06] You will see GQA quite a lot.
+[01:18:10] And there is one last thing that I want to talk to you about,
+[01:18:13] which is the normalization.
+[01:18:17] So in the original transformer architecture.
+[01:18:21] So if you remember, so it's a little bit more
+[01:18:23] of a detail when you first read the paper.
+[01:18:25] But the way people do normalization is they first
+[01:18:31] perform the sublayer operation and then they add to the inputs
+[01:18:40] and then they normalize.
+[01:18:41] So they do normalization of x plus sublayer of x.
+[01:18:45] So it's also called post-norm.
+[01:18:48] So you're normalizing after the operation.
+[01:18:52] And the reason why people thought
+[01:18:55] it was maybe not the best way is because here
+[01:18:58] the idea behind residual connection
+[01:19:00] is that you want to let the input through just
+[01:19:05] for the gradient to flow better.
+[01:19:07] And so here the x is actually within the layer normalization.
+[01:19:11] So it's not great.
+[01:19:13] And so this is the reason why people nowadays, what they do
+[01:19:17] is they don't normalize after the operation.
+[01:19:19] They actually normalize before.
+[01:19:21] So they first normalize the inputs
+[01:19:24] and then they put it into the layer.
+[01:19:26] And then they add it to x.
+[01:19:28] It's also called pre-norm.
+[01:19:31] And it's just a way for the residual connection
+[01:19:33] to do its job of letting the gradient flow.
+[01:19:39] So you will see pre-norm as also a very common method.
+[01:19:42] And one last thing, I promise, which is the layer
+[01:19:47] normalization itself.
+[01:19:49] So in the original transformer, here we're
+[01:19:52] normalizing across all the activation by first recentering
+[01:19:57] x and then having a term, gamma, and then
+[01:20:02] some bias beta, which helps with training stability
+[01:20:06] and convergence.
+[01:20:08] But people have tried with other normalization methods.
+[01:20:11] And in particular, they have found that RMS norm--
+[01:20:16] RMS stands for Root Mean Squared norm,
+[01:20:19] actually does the job just as well.
+[01:20:22] And here, you don't need to recenter x,
+[01:20:25] you just need to rescale it and to have just one
+[01:20:29] factor that you need to learn.
+[01:20:32] And that is the reason why people tend to use it.
+[01:20:36] And I think this was all the tricks I had.
+[01:20:38] So just as a summary.
+[01:20:41] Before on normalization front, people
+[01:20:44] used to do post-norm and layer norm,
+[01:20:47] and nowadays people do pre-norm and RMS norm.
+[01:20:52] So long story short, nowadays RoPE, local attention, gka GQA,
+[01:21:02] pre-norm, and RMS norm.
+[01:21:07] And with that, I'll give it to Shervin.
+[01:21:11] Thank you Afshin.
+[01:21:13] So now we're going to spend some time together
+[01:21:16] to talk about next token prediction.
+[01:21:19] And as Afshin has mentioned, LLMs
+[01:21:23] they use this autoregressive process
+[01:21:25] where you start with a given set of tokens that
+[01:21:28] have been processed, and then you generate the others
+[01:21:31] one at a time.
+[01:21:33] So let's say you start with just BOS.
+[01:21:37] So you generate A and then teddy, bear, is, and then
+[01:21:42] you complete the sequence.
+[01:21:44] So now the question is, how do you generate the next token?
+[01:21:48] So you know that all of these are processed
+[01:21:53] through these decoder layers.
+[01:21:55] So you have the self-attention mechanism
+[01:21:57] and the feedforward neural network
+[01:22:00] that is repeated n times because you have n layers of decoder
+[01:22:04] that are stacked.
+[01:22:06] But then at the end, it is projected on a linear layer
+[01:22:10] to predict the next token on the space of your vocabulary.
+[01:22:16] And there might be several ways to choose it.
+[01:22:20] So what could be a natural way?
+[01:22:25] So first, since you have a probability distribution,
+[01:22:28] one piece of intuition could be the probability distribution
+[01:22:32] has done a lot of work for me.
+[01:22:34] It says, what is the most probable token?
+[01:22:37] So let's just take it.
+[01:22:39] So that could be one.
+[01:22:42] But the thing is, as you compute tokens one after the other,
+[01:22:48] you will try to optimize the next token immediately.
+[01:22:53] But as you have generated the whole sequence,
+[01:22:56] you see that the global sequence might not be
+[01:22:59] with optimal joint probability.
+[01:23:02] So this is one weakness of this approach.
+[01:23:07] And you might be tempted to go the joint probability
+[01:23:11] route a bit more.
+[01:23:12] So this is why you have techniques like beam search
+[01:23:17] that doesn't do full joint probability because that
+[01:23:20] would be too computationally expensive.
+[01:23:23] But it does track k path at a time.
+[01:23:27] So let's say you want to compute the next token,
+[01:23:29] instead of only selecting the next one,
+[01:23:32] you will consider k path all the time.
+[01:23:36] So here you have beginning of sequence.
+[01:23:39] You have an there that are good like the two best ones.
+[01:23:44] And then you generate the next probability distribution,
+[01:23:47] and then you keep on keeping the k best and so on.
+[01:23:55] So who can tell me, what kind of weakness
+[01:23:58] you see out of these two techniques
+[01:24:01] that I haven't called out just yet?
+[01:24:07] Yes.
+[01:24:08] So there is a more computation.
+[01:24:11] Yes, for the second one, but not for the first one.
+[01:24:13] I'm looking for something that is common to both techniques.
+[01:24:18] So what can you say about the reproducibility
+[01:24:25] of choosing always the highest probability token?
+[01:24:29] It will always be the same.
+[01:24:32] What can you say about beam search?
+[01:24:35] Let's say you redo the computations at the same time.
+[01:24:38] Do you get the same path each time or will it change?
+[01:24:45] Yeah, great.
+[01:24:46] So yeah.
+[01:24:46] Same path and it's deterministic.
+[01:24:49] Great.
+[01:24:52] And this is where I want to bring your intuition on why that
+[01:24:56] may not be great, because as someone
+[01:24:59] who optimizes things for a living, you might say,
+[01:25:03] OK, I don't mind.
+[01:25:05] Determinism might be good.
+[01:25:07] But I just want to show you as a user
+[01:25:09] why you would care about it.
+[01:25:11] So let's suppose you are a chatbot user of all our favorite
+[01:25:16] LLMs, and you ask a given question,
+[01:25:20] like let's say a greeting message, "Good, and you?"
+[01:25:24] And let's say your friends ask the same message
+[01:25:29] and you have the same answer, and so on, you
+[01:25:32] might feel that the chatbot is robotic.
+[01:25:36] And robotic chatbots, I don't know about you,
+[01:25:38] but it's not so appealing because it feels like it's still
+[01:25:43] heavily engineered, whereas you as a human,
+[01:25:46] you might be tempted to respond a bit differently
+[01:25:49] to similar prompts.
+[01:25:51] So what I said here is mostly a thought experiment,
+[01:25:55] because in practice, the context of the LLM
+[01:25:59] might change quite a bit.
+[01:26:00] Let's say today we are the 2nd of October at Stanford.
+[01:26:03] If I ask this question one hour from now,
+[01:26:06] the context will change a bit.
+[01:26:08] It might put my new time and other pieces of information.
+[01:26:12] So this might not strictly apply.
+[01:26:15] But still you see this robotic behavior.
+[01:26:18] Whereas non-deterministic behavior
+[01:26:22] could give similarly well-sounding
+[01:26:26] answers as potential choices, which is great.
+[01:26:30] So I hope I convinced you that determinism is not the best.
+[01:26:36] So it can be good for some use cases.
+[01:26:38] I'll talk about it in a bit.
+[01:26:42] And one natural next step to combat determinism
+[01:26:47] is to go back to this probability distribution
+[01:26:51] and simply sample from it, because you have a probability
+[01:26:54] distribution, you have weights.
+[01:26:56] All our computational methods enable
+[01:26:59] us to sample the next word.
+[01:27:01] So let's just do that.
+[01:27:03] And you can do so with two methods,
+[01:27:08] because you might not want to deal with the whole distribution
+[01:27:11] all the time.
+[01:27:12] So you might want to select amongst top-k most
+[01:27:17] probable next tokens.
+[01:27:20] And the second technique that is used quite often
+[01:27:24] is top-p where you want to select
+[01:27:27] tokens that have a given probability
+[01:27:30] distribution in cumulate.
+[01:27:36] So I promised you that I would tell you
+[01:27:40] when determinism is needed.
+[01:27:42] So, for example, if you perform natural language tasks that
+[01:27:46] are tricky and need reproducibility,
+[01:27:50] for example, let's say you want to summarize a piece of text.
+[01:27:52] You want the same output all the time, that can be good.
+[01:27:55] In one of the later lectures, we're
+[01:27:57] going to talk about evaluations and particularly LLM
+[01:28:01] as a judge, where you want consistency between the ratings
+[01:28:04] that you give.
+[01:28:05] So these two are good examples.
+[01:28:12] In the rest of the time, this non-deterministic path
+[01:28:16] might be the most attractive.
+[01:28:20] So now I'm going to go into the specifics
+[01:28:24] that I mentioned on a high-level,
+[01:28:25] but making sure that it makes sense.
+[01:28:27] So in the last layers, you have this linear projection
+[01:28:31] between d model, the embedding space of your token
+[01:28:35] at a given time.
+[01:28:37] And then you project it on the space of vocabulary.
+[01:28:41] And then based on this, you apply this Softmax operator
+[01:28:47] to convert these numbers into a probability distribution.
+[01:28:52] And why am I telling you that?
+[01:28:54] It's because I want to introduce a parameter that you might have
+[01:28:59] heard as users quite bit-- the temperature
+[01:29:02] T, which helps modulate the probability
+[01:29:07] distribution that you get.
+[01:29:09] So here, as you see, so the regular Softmax operator
+[01:29:16] has T equals 1.
+[01:29:17] So the formula that you see on the right is T equals 1.
+[01:29:20] You introduce T like so.
+[01:29:23] I want to ask your intuition of how you feel the probability
+[01:29:29] distribution to be then.
+[01:29:31] So let's say you take T bigger than 1.
+[01:29:35] If you have a given probability distribution,
+[01:29:38] how do you feel the probability distribution will change?
+[01:29:46] So yeah, the one comment is flatter.
+[01:29:48] Yeah, great.
+[01:29:49] And let me ask you the opposite.
+[01:29:51] Let's say you have very small t.
+[01:29:53] What is your intuition?
+[01:29:55] Yeah and the comment is sharper.
+[01:29:57] Yeah, great.
+[01:29:58] So is it clear to everyone?
+[01:30:01] Because if you have small T, then the Xi that is high
+[01:30:06] will be more emphasized.
+[01:30:10] And the for the other i's, the some at the bottom
+[01:30:14] will take it over.
+[01:30:15] So you will have just one term--
+[01:30:18] so you will have just one index that
+[01:30:21] will have a probability close to one
+[01:30:23] and the other ones will be close to 0.
+[01:30:25] And when T is large, then all of these x exponential
+[01:30:29] of something over T will tend to 0 within the exponential.
+[01:30:33] So everything will be more or less uniform.
+[01:30:37] And this is exactly what these graphs show.
+[01:30:40] And one thing, so this is a determinism
+[01:30:44] is continuous more so than truly like binary choice.
+[01:30:49] So you're not committed to either turn it on or off.
+[01:30:54] You can adjust the temperature as a setting.
+[01:30:58] And I want to say-- so I talked about determinism.
+[01:31:02] Does it really happen?
+[01:31:04] So you could think that it does, because when
+[01:31:06] you look at your decoder architecture,
+[01:31:09] you have embeddings that are learned.
+[01:31:11] OK, these are deterministically set at inference time.
+[01:31:14] It goes through the masked self-attention mechanism.
+[01:31:17] You have fixed weights, fixed operations.
+[01:31:20] You could think that's fixed, feedforward neural network.
+[01:31:22] You have given weights that are fixed.
+[01:31:25] You multiply.
+[01:31:25] This should be fixed and so on.
+[01:31:29] So with a temperature of 0, you would
+[01:31:31] think that this is completely deterministic.
+[01:31:34] But it turns out that not because in practice LLM
+[01:31:39] inference engines, they will batch your request among others.
+[01:31:44] And the reason why nondeterminism comes into play
+[01:31:48] is a purely computational one.
+[01:31:50] In theory, it should still be deterministic.
+[01:31:53] But there is this concept of batch invariance
+[01:31:57] that is not respected in some cases.
+[01:32:00] And I strongly recommend this blog
+[01:32:03] from [INAUDIBLE] as a great piece of reading.
+[01:32:07] So he goes through the exact reason.
+[01:32:10] And if you want me to break it down to you,
+[01:32:13] it all goes to the floating points non-associativity
+[01:32:19] with respect to the addition operation,
+[01:32:22] where the order of addition does matter on the result
+[01:32:29] that you get.
+[01:32:32] So let's say you add a big number to a small number
+[01:32:37] and then you retract that big number, you might get 0.
+[01:32:42] Whereas if you do that operation separately,
+[01:32:44] you will get that small number back.
+[01:32:46] So it all has to do with the representation of floating point
+[01:32:49] numbers that are approximated.
+[01:32:51] So this relationship does apply in the world of floating points.
+[01:33:01] Yeah.
+[01:33:05] So the comment here the tensor should
+[01:33:08] be computed independently.
+[01:33:10] So it turns out that depending on the implementation,
+[01:33:14] the order of operation within these tensors will change.
+[01:33:19] Yes, that is the reason.
+[01:33:23] So yeah, the blog has more information on exactly why
+[01:33:28] and then how to build kernels that
+[01:33:30] do apply this as great reading.
+[01:33:34] Any other questions?
+[01:33:39] OK, great.
+[01:33:41] And so now we talked about decoding in the usual case.
+[01:33:46] Sometimes, and more particularly in an industry setting,
+[01:33:50] you might want to use these LLMs to perform tasks you would
+[01:33:54] have used complex systems for.
+[01:33:57] So you might want to generate let's say structured output,
+[01:34:02] such as JSON.
+[01:34:04] And one question that you might ask yourself,
+[01:34:07] let's say you want to generate a piece of data
+[01:34:10] in this specific format and then this matters to you.
+[01:34:13] Because if it doesn't do it right,
+[01:34:15] then parsing fails downstream and you're in trouble.
+[01:34:18] How do you do so?
+[01:34:20] So one first approach that you could think about
+[01:34:23] is just ask the LLM for it, do this in JSON format
+[01:34:27] and hope for the best.
+[01:34:29] With today's models, even the lightest,
+[01:34:32] this usually works well.
+[01:34:35] But it's not 100% and what you want is 100%.
+[01:34:38] So how can you do that?
+[01:34:40] So there is a concept called guided decoding,
+[01:34:44] where the span of available tokens
+[01:34:48] to be predicted at the next step is restricted,
+[01:34:52] depending on the syntax of the language you
+[01:34:56] want to decode this in.
+[01:34:58] So let's say you are in JSON.
+[01:34:59] You know That your first token must
+[01:35:03] be a specific symbol and so on.
+[01:35:10] And this is how you could deal with it.
+[01:35:14] OK, so I hope all made sense.
+[01:35:17] And now we're going to talk about one exciting part, which
+[01:35:20] is prompting.
+[01:35:23] And I want to introduce some terms,
+[01:35:27] so that we all know some basics of vocabulary there.
+[01:35:32] So let's say you want to issue a request to an LLM.
+[01:35:36] Usually, you do not put just the BOS token
+[01:35:39] and let it generate everything afterwards.
+[01:35:42] You have a given prompt.
+[01:35:44] So here my prompt could be a teddy bear.
+[01:35:47] And I want to generate the next tokens out of it.
+[01:35:50] So what happens is that I will put all of them as input.
+[01:35:54] And then autoregressively, it will compute each token one
+[01:35:59] at a time.
+[01:36:01] And you might have heard of this concept called context window.
+[01:36:05] Where does it come at play here?
+[01:36:09] So at the stage of next token prediction, anywhere
+[01:36:14] you are, what is as input is your context window.
+[01:36:19] And when you look at your whole prediction,
+[01:36:23] once it's completely done, whatever tokens were generated
+[01:36:26] are called the output tokens.
+[01:36:30] So you might be tempted sometimes
+[01:36:31] to say that the context window is exactly what you
+[01:36:34] put as input as a user, but it actually is more than that,
+[01:36:38] because every token that you generate
+[01:36:41] needs to be put back at the input level, which
+[01:36:44] is why when you think about these large numbers,
+[01:36:47] you think I can input anything.
+[01:36:50] These are large numbers as context window,
+[01:36:52] as we'll see in the slide.
+[01:36:54] You need to take that into account.
+[01:36:56] So it's linked with output length.
+[01:37:00] Yep.
+[01:37:02] So the question is, why if you need
+[01:37:05] to have a fixed context length, like a maximum context length?
+[01:37:08] So the reason is a computational one.
+[01:37:10] And we'll see very soon why it might not even
+[01:37:14] be desirable to have higher context length.
+[01:37:17] So there is also an intuition based one reason.
+[01:37:21] We'll it in seen in a second.
+[01:37:25] That makes sense?
+[01:37:27] So I want to give some orders of magnitude here.
+[01:37:30] So in terms of context length, you
+[01:37:33] might all know about that O of 1 million tokens
+[01:37:36] as input, which is the industry standard.
+[01:37:39] And then as output tokens, it's usually in the order
+[01:37:43] of magnitude of 100k.
+[01:37:46] That was true until two days ago where
+[01:37:49] I had to rework this slide.
+[01:37:51] Actually, maybe soon, we're going
+[01:37:52] to move into the million territory there as well.
+[01:37:55] And this new LLM that came out didn't publish an input maximum
+[01:38:00] length.
+[01:38:01] So maybe we might have gone one order of magnitude higher there.
+[01:38:05] But these are some good orders of magnitude.
+[01:38:08] And then to give you some intuition on what token means.
+[01:38:13] So usually, a token is 3/4 of a word and a page is about 500
+[01:38:21] tokens.
+[01:38:22] So when you talk about orders of magnitude,
+[01:38:24] if you take 100k tokens, it's about a book, and a million,
+[01:38:29] it's a large book.
+[01:38:33] And now coming back to your question,
+[01:38:35] is it the case that always having more tokens as input
+[01:38:39] is better?
+[01:38:40] Well, you need to beware of a phenomenon that's called
+[01:38:43] "context rot," where there is this test called needle
+[01:38:48] in a haystack, where you put a piece of information that you
+[01:38:51] care about somewhere in that context window and the task is
+[01:38:55] a retrieval one.
+[01:38:56] And it turns out that as the context length goes higher,
+[01:39:01] the LLM has more and more difficulty
+[01:39:04] to retrieve that piece of information.
+[01:39:07] So sometimes it's a problem that comes from the LLM itself.
+[01:39:11] So you will always see in the model releases
+[01:39:14] the hallucination rate that goes down and so on.
+[01:39:18] But this is not something that you could perfectly
+[01:39:21] solve, because conceptually, when
+[01:39:24] you mix a piece of information, among others,
+[01:39:27] it might be the case that there is so much noise
+[01:39:29] around that the task of retrieving
+[01:39:31] exactly that piece of information is not realistic.
+[01:39:36] And in general, putting more and more as inputs
+[01:39:41] pushes that risk up, which is why in general you
+[01:39:45] hear about context compaction.
+[01:39:47] You should start a new chat every time.
+[01:39:49] These things still apply conceptually.
+[01:39:52] And this is why we are not here with unlimited context window.
+[01:39:57] It's also like a good practice.
+[01:40:00] OK, awesome.
+[01:40:02] And I'm going to spend the last minutes on techniques
+[01:40:05] to improve performance without you changing
+[01:40:08] any weights of your model.
+[01:40:11] So there is a large concept called in-context learning,
+[01:40:16] where instead of teaching in terms of weights tuning
+[01:40:21] your LLM, you give examples and solutions of what you want.
+[01:40:27] So let's say you are in the task of asking your LLM about the age
+[01:40:33] of your teddy bear.
+[01:40:35] So if you just ask it in zero shot versus give some question
+[01:40:40] answers of what answer you expect,
+[01:40:43] the LLM will learn the format and maybe even the reasoning
+[01:40:49] that it needs to go through implicitly.
+[01:40:53] And these days, you will see few shot learning
+[01:40:57] being less and less used because the reasoning models,
+[01:41:00] they get better and better.
+[01:41:02] And the bad effects of few shot learning
+[01:41:05] is that it will make your model overfit on the specific examples
+[01:41:09] that you give it, whereas what you want
+[01:41:11] is be more reasoning-based.
+[01:41:13] So you will see some prompt tuning techniques that
+[01:41:17] turn these examples into instructions,
+[01:41:20] and people typically handcraft such instructions
+[01:41:23] and put them instead of examples.
+[01:41:26] And then again, some other obvious downsides are also
+[01:41:31] you have more input tokens, which
+[01:41:34] increases cost and latency.
+[01:41:36] So on that reasoning part, you might
+[01:41:38] say, how about we put some reasoning in there?
+[01:41:42] So there is this landmark paper called chain of thought,
+[01:41:48] where it takes in-context learning to the next stage
+[01:41:52] by teaching the model in these few short prompts how
+[01:41:57] it gets there.
+[01:41:59] And the authors, they saw that the model learned the reasoning
+[01:42:04] path, and overall it improved performance.
+[01:42:08] And I don't want you to consider chain of thought
+[01:42:11] to be purely an in-context learning technique.
+[01:42:17] It's way more than that.
+[01:42:18] And we will talk about reasoning models
+[01:42:20] where thinking tokens are used and the same concept applies.
+[01:42:24] So we'll talk about it then.
+[01:42:26] And one technique that one might be tempted to use offline
+[01:42:31] is called self-consistency.
+[01:42:33] So how about, instead of generating one reasoning path, I
+[01:42:38] generate several ones?
+[01:42:40] Then one nice thing is that it makes the output that you might
+[01:42:44] be interested in, let's say in the arithmetic world,
+[01:42:47] more stable.
+[01:42:49] And by majority voting, you can get to an answer
+[01:42:53] where more generations agree to.
+[01:42:56] Yeah, we'll see in reasoning models lectures, more
+[01:43:00] about these.
+[01:43:02] And that's all I had for you today.
+[01:43:03] And I hope you have a great weekend.
+[01:43:07] Thank you.
+[01:43:08] [APPLAUSE]

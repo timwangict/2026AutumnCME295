@@ -1,0 +1,1761 @@
+[00:00:05] Hello, everyone, and welcome to lecture 3 of CME 295.
+[00:00:12] So today is an exciting day because we
+[00:00:14] will learn how to actually train a large language
+[00:00:18] model in a way that aligns with our end goal.
+[00:00:22] But before we do that, as always,
+[00:00:25] we will recap what we saw last time.
+[00:00:28] So if you remember, last time, we
+[00:00:31] talked about how we could use the transformer architecture
+[00:00:35] that we had seen in lecture 1 and, in particular,
+[00:00:39] see if there is any component of the transformer
+[00:00:42] that we could leverage for something bigger.
+[00:00:46] So we saw that the transformer was composed
+[00:00:48] of an encoder and a decoder.
+[00:00:51] And in particular, if you remove the encoder part,
+[00:00:57] you could have a much simpler architecture
+[00:01:00] that would reframe the problem as a text-to-text problem.
+[00:01:07] And we saw that if we were to scale such an architecture
+[00:01:12] in terms of number of parameters-- so model size,
+[00:01:16] number of tokens that the model is trained on--
+[00:01:20] we saw a better and better performance.
+[00:01:23] So these were the scaling laws that we saw.
+[00:01:26] But something else that we saw is
+[00:01:29] that, given that we only have a limited amount of compute,
+[00:01:33] that in order for us, given some amount of compute,
+[00:01:38] to use it in the best way possible,
+[00:01:41] that we should be careful to not undertrain our model.
+[00:01:46] And in particular, there was a paper, the Chinchilla paper,
+[00:01:50] that saw that actually, roughly speaking,
+[00:01:54] for every parameter you have to actually train it on 20 tokens.
+[00:01:59] And it found that many of the architectures that were scaled
+[00:02:02] up were actually undertrained.
+[00:02:06] And then, given that having bigger models lead
+[00:02:10] to better performance, we then wondered
+[00:02:14] if actually activating all the parameters was actually useful.
+[00:02:19] So we saw a class of models called
+[00:02:22] mixture of experts, which selected
+[00:02:25] specific experts to activate for a given forward pass.
+[00:02:31] And we saw that such an architecture
+[00:02:34] was something we could place within the feedforward neural
+[00:02:37] network, which was where most of the compute was happening.
+[00:02:43] And we saw a bunch of other methods
+[00:02:46] that improved the way we use transformer-based architectures
+[00:02:51] since it was first released.
+[00:02:52] So in particular, we saw the position embeddings,
+[00:02:56] which was actually something that
+[00:02:58] would be better to happen within the attention layer.
+[00:03:01] So we saw RoPE.
+[00:03:02] We saw some other forms of attention-- so not global,
+[00:03:06] but Sliding Window.
+[00:03:08] We saw a Group Query Attention as a way
+[00:03:11] to save on the keys and values that we need to store in order
+[00:03:16] to decode our sequence.
+[00:03:18] And we also saw some normalizing methods.
+[00:03:22] And this is where we left off--
+[00:03:24] lecture 2.
+[00:03:26] And as I mentioned, this lecture is
+[00:03:29] about learning how we can actually train a large language
+[00:03:33] model.
+[00:03:35] So we're going to start with the first step, which
+[00:03:38] is called pretraining.
+[00:03:40] And I want to motivate that step by telling you
+[00:03:43] about how people usually trained models traditionally.
+[00:03:49] So if this class was being held maybe 15 years ago,
+[00:03:53] we would actually try to train models on a per-use-case basis.
+[00:03:59] So if, for instance, we wanted to detect spam,
+[00:04:02] we would have one model for spam detection, another model for,
+[00:04:05] let's say, sentiment extraction, another one for, let's say,
+[00:04:08] translation and so on.
+[00:04:12] But the idea here is to actually leverage what we learn in one
+[00:04:19] go and re-use that for other use cases.
+[00:04:22] So this is also something that is known as transfer learning.
+[00:04:25] So actually, the idea behind what we want to do
+[00:04:28] is to do a one-time big what we call
+[00:04:32] pretraining to learn about language
+[00:04:36] and then start from there if we want to specialize
+[00:04:40] that for a specific use case.
+[00:04:43] So this is the idea.
+[00:04:45] We want to have the first step of our training
+[00:04:48] process as being something that learns about language.
+[00:04:52] So it's called pretraining.
+[00:04:54] And we're going to talk more about this.
+[00:04:56] And then the second stage is more about
+[00:05:00] tuning this for a specific use case.
+[00:05:02] So in the previous example, let's assume
+[00:05:05] we don't have a general-purpose model
+[00:05:07] but we have one big pretrained model.
+[00:05:09] We would tune that pretrained model for this specific task.
+[00:05:14] And we will actually see that LLMs are general enough
+[00:05:18] to be able to actually tackle a bunch of tasks
+[00:05:21] without us having to retrain those,
+[00:05:24] but we will see that more later on.
+[00:05:28] Cool.
+[00:05:29] So as I mentioned, this first step
+[00:05:33] is about learning about language.
+[00:05:35] So what we want to do is to see a bunch of texts,
+[00:05:40] a bunch of codes, a bunch of generated generations,
+[00:05:45] all over the internet.
+[00:05:47] So here, typically, we would assemble pieces of text
+[00:05:51] in English, but also in other languages.
+[00:05:54] We would assemble, let's say, codes in Python,
+[00:05:57] in other languages-- math, science, you name it.
+[00:06:02] And we would train our model in a next-token-prediction fashion.
+[00:06:09] So I'm going to tell you exactly how that would work.
+[00:06:13] So let's assume we have a piece of text on which we want
+[00:06:18] our model to be pretrained on.
+[00:06:20] So here what we would try to do is to feed some text as input
+[00:06:27] and ask the model to predict the next token,
+[00:06:32] and repeat that process for all the tokens in the text.
+[00:06:38] So in this example, let's assume we have this piece of text,
+[00:06:41] and we tokenize that with your favorite tokenizer.
+[00:06:44] So here it's an arbitrary way of tokenizing things.
+[00:06:49] And what we would do is we would take our LLM, which, as we saw,
+[00:06:53] is typically a decoder-only-based architecture,
+[00:06:58] and we would feed in the first token.
+[00:07:01] And what we would do is try to predict the next token.
+[00:07:04] So here, the very beginning of the prediction task,
+[00:07:09] we only have the beginning-of-sequence token
+[00:07:12] that is fed.
+[00:07:13] And here we would try to predict the first token.
+[00:07:16] And then we would input that token
+[00:07:19] to try to predict the next one, and so on and so forth.
+[00:07:26] And actually, you don't need to do that sequentially
+[00:07:32] when you do your pretraining, because it's
+[00:07:34] highly parallelizable.
+[00:07:36] So what you would actually do is feed the entire input as inputs
+[00:07:42] and try to predict the next token for all these inputs.
+[00:07:50] So it's highly parallelizable.
+[00:07:51] You can think of it as a huge matrix multiplication that
+[00:07:54] is happening under the hood.
+[00:07:56] And it's something that you will also
+[00:07:58] find as being mentioned as being teacher-forcing because here,
+[00:08:04] no matter what the LLM predicts-- so by the way,
+[00:08:07] it's the same thing here.
+[00:08:08] No matter what the LLM predicts, we always
+[00:08:11] put as input for the next step which word
+[00:08:15] it should have predicted.
+[00:08:17] So we're forcing the model, given some input,
+[00:08:20] to predict the next token that is in that text.
+[00:08:25] And we saw that this is possible because--
+[00:08:29] oh, you have a question.
+[00:08:32] So excellent question.
+[00:08:33] The question is, well, if you teacher-force
+[00:08:36] the model to learn a certain way,
+[00:08:38] it is not actually having things.
+[00:08:40] It is generating itself as inputs.
+[00:08:42] So there is a mismatch between training and inference.
+[00:08:45] So that's an excellent point.
+[00:08:47] And we will see, actually, how we can solve that later on.
+[00:08:50] So it's a great remark.
+[00:08:52] We will see some methods.
+[00:08:54] Yeah?
+[00:08:56] So the question is, if you give only the beginning of sequence,
+[00:08:59] the LLM has no information, and so do you give a prompt?
+[00:09:02] So the answer is not at this stage.
+[00:09:05] But if you don't give anything to your LLM,
+[00:09:08] it will learn to just start the sequence with something that
+[00:09:11] starts the sequence.
+[00:09:12] So it will learn tokens that could
+[00:09:15] be likely to appear at the beginning of the sequence.
+[00:09:18] But to your point, there is no information.
+[00:09:21] So-- yeah.
+[00:09:25] Cool.
+[00:09:26] One thing I wanted to add here is
+[00:09:29] that we can do that in a parallel fashion because
+[00:09:33] of a trick that I believe we briefly
+[00:09:36] saw during lecture 1, which is the masked self-attention that
+[00:09:42] allows you to only attend to tokens that
+[00:09:46] are before you and yourself.
+[00:09:49] So in other words, if you want to predict, let's say,
+[00:09:52] the next token after "teddy," you would only be able to attend
+[00:09:59] to the token "teddy" and all the tokens before you,
+[00:10:04] thanks to the Masked self-attention.
+[00:10:09] Great, and so just formalizing that a little bit more,
+[00:10:12] so what we're doing is we're inputting something
+[00:10:15] into the LLM, which you can think
+[00:10:17] of it as a sequence of tokens, until, let's say, t minus 1.
+[00:10:23] And what you want to do is the LLM
+[00:10:26] to actually produce the probability of the next token
+[00:10:31] given your input.
+[00:10:33] And so in a more formal fashion, you
+[00:10:36] will use the cross-entropy loss in order to do that.
+[00:10:41] So I have a formula on the slide,
+[00:10:43] but I'm going to just derive it from first principles.
+[00:10:47] So as with a usual training setup, what we're trying to do
+[00:10:56] is to learn parameters theta such
+[00:11:00] that the probability of our model seeing the training data
+[00:11:05] is maximized.
+[00:11:08] So the probability of the sequence--
+[00:11:12] you can think of it as p of the token-- so x1 until xn.
+[00:11:21] And this probability is something
+[00:11:24] that is produced by the model.
+[00:11:26] So it's parameterized by theta.
+[00:11:30] So what you want to do is to find the parameters theta that
+[00:11:35] maximize the probability of a model seeing the training set.
+[00:11:41] So your goal is to maximize this quantity.
+[00:11:46] And just going back to the basics of probability,
+[00:11:50] it just turns out that you can have
+[00:11:54] some other way of writing this.
+[00:11:58] So you have p of x1 times p of x2 given x1 times all the way
+[00:12:09] to p of x, let's say, n, given x1 until xn minus 1,
+[00:12:17] which you can rewrite with this product.
+[00:12:22] So it's t from 1 to n of p of theta of xt given your input.
+[00:12:32] You want to maximize this quantity.
+[00:12:34] The problem with maximizing the products of probabilities,
+[00:12:38] which are each between 0 and 1, is that the product tends to 0,
+[00:12:45] so it can lead to numerical instabilities.
+[00:12:48] So what people do is they typically take
+[00:12:51] the log of this quantity.
+[00:12:53] So I'll just do the following.
+[00:12:56] We have-- so let's see--
+[00:13:00] log of this quantity.
+[00:13:01] So we just take log of this.
+[00:13:07] And this gets transformed to a sum of the log
+[00:13:13] of the probabilities.
+[00:13:19] So this is just a property of the logarithm.
+[00:13:22] And then what we do is we want to maximize this quantity.
+[00:13:28] But in machine learning, what we like to do
+[00:13:31] is to minimize things.
+[00:13:33] So we actually minimize the minus of this quantity.
+[00:13:39] And then we just want to not have this quantity be
+[00:13:42] a function of the number of tokens in the sequence in terms
+[00:13:44] of scale, which is why we divide by the number of tokens.
+[00:13:49] And this is our loss.
+[00:13:59] And it's a function of theta.
+[00:14:01] And the theta comes from the p of theta,
+[00:14:04] which is something that our model outputs
+[00:14:07] in the last layer--
+[00:14:09] so all that to say that you will find the cross-entropy loss
+[00:14:13] in a lot of places.
+[00:14:15] And just instead of memorizing this formula,
+[00:14:17] just think of it from first principles.
+[00:14:19] It's just you trying to find parameters theta that
+[00:14:24] maximize the probability of your model seeing the training data.
+[00:14:31] OK, cool.
+[00:14:32] So as I mentioned, p theta is the predicted probability,
+[00:14:35] exceeds your target token x less than t is the past tokens.
+[00:14:44] And big T is the number of tokens.
+[00:14:48] So you will sometimes see another loss that
+[00:14:53] is actually the same loss but rescaled called
+[00:14:56] Bits Per Byte, BPB.
+[00:15:01] And the idea is that in the cross-entropy loss that I just
+[00:15:05] mentioned, the absolute value is actually
+[00:15:11] a function of your tokenizer.
+[00:15:14] Depending on how you tokenize your data,
+[00:15:18] this value might be different.
+[00:15:22] So in case you want to compare your loss between,
+[00:15:25] let's say, a given model that has a certain type of tokenizer
+[00:15:28] and another model that has another kind of tokenizer,
+[00:15:32] things may not be exactly comparable,
+[00:15:35] which is why sometimes you will see this loss
+[00:15:41] expressed in a tokenizer-free manner where you take that loss,
+[00:15:47] you actually multiply this by the number of tokens divided
+[00:15:51] by the number of bytes, and you also
+[00:15:54] multiply this by 1 over log of 2,
+[00:15:58] just so that you can interpret this as bits,
+[00:16:00] which is why bits per byte.
+[00:16:05] Cool, OK, so now that we know--
+[00:16:08] yeah, you have a question.
+[00:16:11] So the question is, what is B?
+[00:16:13] So B is the number of bytes in your input
+[00:16:17] because each character can be encoded with bytes.
+[00:16:21] So yeah.
+[00:16:25] Yeah?
+[00:16:27] So the question is, you use the masked self-attention so that
+[00:16:30] you cannot attend to something in the future.
+[00:16:32] Is it something that is only for decoder or also for encoder?
+[00:16:35] So here in this case, we don't have an encoder,
+[00:16:38] and we only have a decoder.
+[00:16:41] And our goal is to predict the next token.
+[00:16:44] We need to make sure that when we predict the next token,
+[00:16:48] we can only rely on the things that we have decoded so far
+[00:16:51] to mimic the inference setup.
+[00:16:54] So long story short is we're in a decoder-only setup.
+[00:16:58] If we were in an encoder-only setup,
+[00:17:00] we could not do this in this fashion.
+[00:17:02] We could not predict tokens one at a time,
+[00:17:05] unless you do something else.
+[00:17:07] And we will see that in lecture 8.
+[00:17:10] Yeah.
+[00:17:14] OK, cool.
+[00:17:15] So now we know how we can train our model, which loss we
+[00:17:20] can use.
+[00:17:20] So here's the cross-entropy loss.
+[00:17:22] The next question is, what kind of data
+[00:17:25] can we actually train our model on?
+[00:17:28] And so here there is a lot of effort
+[00:17:30] that is actually put into the kind of data
+[00:17:32] that you want to train on.
+[00:17:34] This data can come from the web.
+[00:17:38] It can come from repositories, from places where there's code.
+[00:17:44] Lately there's an emphasis on being
+[00:17:47] able to solve things with math, with science just in general.
+[00:17:51] The idea is to have a big-sized corpus on which you
+[00:17:56] can have your model learn about patterns of language, patterns
+[00:18:02] of codes, and it's typically very big in size.
+[00:18:06] Think of it as trillions of tokens.
+[00:18:11] And I think last time there was a question
+[00:18:14] on whether we would actually repeat the same data if we
+[00:18:18] train it, or if we only were seeing unique tokens.
+[00:18:22] Well, there has been some papers actually looking into this.
+[00:18:26] And there's one paper that is here
+[00:18:28] on the slide, which was looking at the case
+[00:18:31] where you're in a data-constrained regime
+[00:18:35] where you only have, let's say, a set amount of tokens.
+[00:18:38] The question is, would you rather stop the training,
+[00:18:43] or is it worth for you actually training multiple times
+[00:18:47] on the same tokens?
+[00:18:49] And the answer in this case is actually yes, up to four times.
+[00:18:53] It's actually something that is allowing
+[00:18:55] you to get better performance.
+[00:18:58] So there is this trade-off of whether you would rather see
+[00:19:04] more unique tokens-- is it of high or low quality?--
+[00:19:08] and whether you want to actually repeat that as well.
+[00:19:11] So that's the question that people ask themselves.
+[00:19:17] Again, on the topic of figuring out which data to use--
+[00:19:23] so there's been a lot of work in trying to figure that out.
+[00:19:26] And so I'll just cite this work as well,
+[00:19:29] DataComp-LM, which tries to tease out the impact of having
+[00:19:36] a high-quality data set versus having a better architecture,
+[00:19:42] Because two people can try to train their model
+[00:19:47] and wonder if a given data is of high enough quality
+[00:19:51] for their setup.
+[00:19:52] But then the performance could be
+[00:19:53] actually due to their own model architecture.
+[00:19:58] So this is trying to normalize the architecture side so that we
+[00:20:03] can only tease out the impact of having a better data versus not.
+[00:20:09] There's a lot of work on that piece as well.
+[00:20:12] And you can also wonder, well, OK,
+[00:20:14] how can I obtain my final data set?
+[00:20:18] Should I put 20% of code, 50% of web, and so on, so on?
+[00:20:22] And so here people have been doing that in multiple ways.
+[00:20:26] And here one way is to train multiple small models
+[00:20:32] on different mixtures of data and see
+[00:20:36] how each of these small models perform so that we can then
+[00:20:41] infer a potential good mix of data that could work well
+[00:20:47] if we were to scale that up.
+[00:20:50] So yeah, I highly recommend also reading that paper in case
+[00:20:52] you're interested.
+[00:20:54] And again, I want to emphasize that the data, preparation data
+[00:20:58] work, is actually an involved one.
+[00:21:01] So I wanted to cite this diagram from Olmol 3, which
+[00:21:07] is an open-weight model.
+[00:21:09] And here it just goes through the training pipeline, the data
+[00:21:13] preparation pipeline, which is quite involved.
+[00:21:18] And as I mentioned, the size of the pretraining data set
+[00:21:22] is typically huge, on the order of trillions of tokens,
+[00:21:28] and lately, even tens of trillions of tokens.
+[00:21:31] So as an example, GLM-5, which is a relatively recent
+[00:21:36] open-weight model, was trained on 30 trillion tokens, just as
+[00:21:41] a point of reference.
+[00:21:44] So you can imagine that in order to train such a big model,
+[00:21:50] you need to have the right infra in place.
+[00:21:53] So I just wanted to say that we will not
+[00:21:55] focus on that in this lecture, but we'll
+[00:21:58] focus on that in lecture 5.
+[00:22:00] So stay tuned if you're interested on that topic.
+[00:22:06] Cool, so this was traditionally the first step
+[00:22:12] that people would do in order to train their LLMs.
+[00:22:15] But in recent years, there is a second stage
+[00:22:18] that has emerged which is called midtraining, which
+[00:22:23] aims at injecting knowledge on tasks that are more
+[00:22:28] aligned with your use case.
+[00:22:31] So if, for instance, you care about your model,
+[00:22:34] let's say, being able to reason, what you want to do
+[00:22:37] is to expose your model to more of that code
+[00:22:41] and masked text data.
+[00:22:45] And so here you would use midtraining and rely
+[00:22:48] on higher-quality data, still doing next-token prediction,
+[00:22:53] in order to have your model learn more
+[00:22:55] about these use cases.
+[00:22:59] So that's one.
+[00:23:01] And the second thing is training your model
+[00:23:05] to see longer contexts, inputs, because one thing that I did not
+[00:23:12] emphasize here is for pretraining, typically
+[00:23:16] for efficiency purposes, we pretrain
+[00:23:19] based on sequence lengths that are
+[00:23:23] on the order of several thousands of tokens.
+[00:23:27] But in reality, you could have tens of thousands
+[00:23:32] of tokens as inputs or even hundreds of thousands of tokens.
+[00:23:35] And you need to teach your model to actually
+[00:23:37] be able to handle that.
+[00:23:40] So we're going to spend maybe one or two minutes
+[00:23:44] on the long context training.
+[00:23:46] So we saw that this was dependent on our ability
+[00:23:53] to encode positions, which is something
+[00:23:56] that nowadays people do.
+[00:23:58] People use RoPE.
+[00:24:00] We saw that there is no learned parameter within RoPE.
+[00:24:04] So we could, in theory, use that out of the box.
+[00:24:09] But the problem is, if you don't do anything,
+[00:24:12] if you just train your model on short sequences
+[00:24:16] and want to actually use that for inference for longer
+[00:24:19] sequences, the reality is that your model actually has never
+[00:24:24] seen the rotations of these longer sequences,
+[00:24:28] so it may get confused.
+[00:24:31] So this is the reason why we have this long context training
+[00:24:35] stage where we're trying to expose our model on these longer
+[00:24:41] sequences.
+[00:24:43] And in particular, there are typically some little tweaks
+[00:24:46] that are made to the RoPE frequencies
+[00:24:51] in order to help our model learn better.
+[00:24:55] So in particular, you will see a bunch of extension methods
+[00:24:58] from RoPE.
+[00:24:59] So I'll cite one.
+[00:25:00] You may see YaRN.
+[00:25:03] And you may wonder, well, why do you need that?
+[00:25:07] So if you were to simply train your model that you previously
+[00:25:12] trained on shorter contexts, if you
+[00:25:15] were to train that model on long context inputs,
+[00:25:20] then you would actually give your model a hard time
+[00:25:25] to learn these longer context position
+[00:25:29] differences, because this would be
+[00:25:31] completely unseen from the model perspective.
+[00:25:35] So what people do is they actually
+[00:25:39] interpolate the frequencies in order
+[00:25:44] to have long position differences be
+[00:25:49] within the range of frequencies that were
+[00:25:51] seen during the short context training.
+[00:25:55] So there are some little tweaks on the frequencies
+[00:25:59] that are used by RoPE in order to help the model learn better.
+[00:26:04] And in addition to that, there is this concept of curriculum
+[00:26:08] learning, so learning-- yes?
+[00:26:12] So the question is, how do they figure out
+[00:26:15] what is the length that they will encounter?
+[00:26:18] So it's preplanned.
+[00:26:20] So they will say, OK--
+[00:26:22] on the figure, actually, you can see an example from GLM-5.
+[00:26:26] The short context training is done on 4,000 long inputs.
+[00:26:31] And then for the longer context training,
+[00:26:34] it's elongated to 128k or even 200k.
+[00:26:38] So they know that number from the start,
+[00:26:41] and they will interpolate accordingly.
+[00:26:43] And then they will use that tweaked frequency
+[00:26:47] and do the training and then let the model learn the weights
+[00:26:50] accordingly.
+[00:26:52] So the question is, how about inference?
+[00:26:54] So they would use the tweaked frequencies
+[00:26:57] after the long context training.
+[00:27:00] So they would initially train the model for short context
+[00:27:05] on some frequencies, and then they perform midtraining.
+[00:27:09] They perform long context training
+[00:27:11] in which they tweak a little bit the frequencies.
+[00:27:14] And then they use these frequencies for inference
+[00:27:17] and so on.
+[00:27:20] Yeah?
+[00:27:21] So the question is, if you use YaRN,
+[00:27:23] do you completely change your setup?
+[00:27:25] So here you actually rely on the RoPE
+[00:27:28] that you had, but you change the frequencies so that the model is
+[00:27:34] more familiar with the ranges of frequencies encountered
+[00:27:37] during long contexts and is more familiar with that, as in,
+[00:27:43] it has seen such frequencies during the short context
+[00:27:46] training.
+[00:27:50] Exactly, yeah.
+[00:27:54] Great.
+[00:27:58] So why is this hard?
+[00:28:00] So if you remember, transformer is based on self-attention.
+[00:28:05] Self-attention is everything attends to everything else--
+[00:28:08] O of n squared complexity.
+[00:28:10] So if you scale up from 4,000 as inputs to hundreds of thousands,
+[00:28:16] well, you have a lot more computation.
+[00:28:19] But it's not the only thing.
+[00:28:20] The second thing is it's actually
+[00:28:21] hard to get data on which some parts of the data
+[00:28:28] need some other parts in a long range fashion
+[00:28:33] in order to predict that specific token.
+[00:28:35] So I'll give you an example.
+[00:28:37] You need your model to learn to use information far in the past
+[00:28:45] in order to make a prediction far in the future.
+[00:28:47] So you need to have some observation
+[00:28:51] that makes use of something that is far in the past
+[00:28:54] and that is not something that is trivially--
+[00:28:57] something that you can come up with.
+[00:28:58] So there is some amount of work that is around coming up
+[00:29:02] with such observations.
+[00:29:05] So there's a number of challenges.
+[00:29:07] But at the end of the day, if you
+[00:29:10] do your pretraining, your midtraining,
+[00:29:14] and your long context training, at the end of that stage,
+[00:29:19] you will, first of all, have spent a bunch of dollars.
+[00:29:24] But then the nice thing is you will
+[00:29:28] have a model that knows about text, that knows about codes,
+[00:29:33] and that has acquired a certain amount of knowledge that
+[00:29:36] was in that data.
+[00:29:39] And in particular here, if you look
+[00:29:41] at the model cards of your favorite models
+[00:29:44] on third-party providers, you will
+[00:29:47] see that there is a knowledge cutoff date, which
+[00:29:50] is the date that is used up until which
+[00:29:54] you have your training data.
+[00:29:58] So for instance, in the case of GPT-6 Astra,
+[00:30:01] you know that the data that was used to train that model was up
+[00:30:04] till April 30th of 2026.
+[00:30:09] And the problem is that that knowledge is fixed in time.
+[00:30:15] So that means that out of the box,
+[00:30:17] if you were to ask your model about something that happened
+[00:30:20] after that cutoff date, your model
+[00:30:23] would have no idea about it because it didn't see it
+[00:30:26] at training.
+[00:30:28] So it doesn't have the knowledge.
+[00:30:31] But we will see techniques to actually circumvent that.
+[00:30:35] So more on that later.
+[00:30:39] So I have a question for you.
+[00:30:41] We've done all this work.
+[00:30:42] We've started from our LLM, just did
+[00:30:45] all of that pretraining, midtraining, and long context
+[00:30:48] training.
+[00:30:48] And let's suppose we input the following prompt.
+[00:30:53] "Can I put my teddy bear in the washer?"
+[00:30:57] What is one response that the LLM can give us at that stage?
+[00:31:07] Yeah?
+[00:31:09] I think you have the right intuition.
+[00:31:10] So here what it will do is-- well,
+[00:31:13] it will not respond to the question.
+[00:31:14] Typically, it will actually try to autocomplete
+[00:31:18] because the model so far has been
+[00:31:20] trained in a next token prediction fashion.
+[00:31:23] It has been trained to guess the next word.
+[00:31:28] So here it will respond something along these lines.
+[00:31:30] So, "Can I put my teddy bear in the washer?"
+[00:31:32] Well, "Teddy bears are often made of materials like polyester
+[00:31:35] and cotton, with plastic eyes and sometimes small
+[00:31:37] accessories"-- typically the kind of thing that you would see
+[00:31:40] in text.
+[00:31:42] Is it useful?
+[00:31:44] No, it's not useful.
+[00:31:46] So we're not done.
+[00:31:47] This was pretraining.
+[00:31:51] Now let's go into the next stage,
+[00:31:53] which is trying to make our LLM useful.
+[00:31:57] So if we ask it questions, we want answers.
+[00:32:01] So in this stage--
+[00:32:04] so first, this stage is called SFT, Supervised Fine-Tuning.
+[00:32:08] And the goal is to change the model behavior to align
+[00:32:13] with what we wanted to do.
+[00:32:16] So in the previous example, if you want to ask a question,
+[00:32:19] you want an answer, so you want to an assistantlike behavior.
+[00:32:24] So the idea behind this stage is to come up
+[00:32:28] with input/output pairs for which you want your model
+[00:32:33] to respond like the output for a given input.
+[00:32:39] So here the objective function will still
+[00:32:43] be next token prediction.
+[00:32:45] You want some input, and you want
+[00:32:48] to predict what the next token is.
+[00:32:51] So in particular, when it comes to acquiring a behavior that
+[00:32:58] is like an assistant, you want pairs
+[00:33:01] of instructions and responses.
+[00:33:04] So as an example, let's say the instruction can be,
+[00:33:08] "Write a short story about a teddy bear who likes to read
+[00:33:11] poetry."
+[00:33:11] And then you have some poem, let's say.
+[00:33:14] Another one about "explain why a teddy bear is a great friend,"
+[00:33:18] and then you have the response.
+[00:33:19] And what you would do here is pass the input, which
+[00:33:26] is the instruction, into your LLM,
+[00:33:30] and try to predict the next token based
+[00:33:32] on that input, via the next-token-prediction objective
+[00:33:38] function, which here we saw is, for instance, done
+[00:33:41] via the cross-entropy loss.
+[00:33:45] So to make sure we're all on the same page here,
+[00:33:47] the instruction could be in blue.
+[00:33:49] And then what we would try to do is
+[00:33:51] to have our model predict the ones
+[00:33:55] in pink, which is the answer.
+[00:33:58] So the setup is slightly different with respect
+[00:34:01] to pretraining.
+[00:34:02] Yes?
+[00:34:04] So the question is, how is SFT different from midtraining?
+[00:34:08] So midtraining is about higher-quality data.
+[00:34:11] But you don't have one specific prompt as input
+[00:34:14] that you're trying to just mimic a behavior as output.
+[00:34:18] It is still a corpus of texts for which you're trying
+[00:34:20] to predict the next token.
+[00:34:23] The main difference is in midtraining compared
+[00:34:26] to pretraining, you have higher-quality data and data
+[00:34:30] that is more aligned with the task of interest.
+[00:34:33] So if you're interested in, let's say, math problems,
+[00:34:35] you would have more math-related data.
+[00:34:38] But here the idea is specifically
+[00:34:41] to tweak your behavior, the behavior of a model,
+[00:34:45] to align with what you want.
+[00:34:47] And in this example, we're passing it an input x.
+[00:34:52] So we're not telling our model to predict the x's as input.
+[00:34:56] And what we want it to do is to predict
+[00:34:59] the next token of the answer.
+[00:35:03] So the slight change with respect to the previous setup
+[00:35:06] is the input here is x, the instruction or the prompts,
+[00:35:14] and then whatever answer that has been decoded so far.
+[00:35:18] And what you want to do is to predict the next token, again,
+[00:35:23] with a cross-entropy-like loss.
+[00:35:27] So you would have the log of the probability of the target
+[00:35:32] token given the input prompt and the past tokens, typically
+[00:35:36] averaged across tokens.
+[00:35:39] So in terms of the kind of data that you would use,
+[00:35:41] you would use data that is aligned with what you want.
+[00:35:44] So here I mentioned one kind of data, which is assistance-
+[00:35:49] or instruction-related data.
+[00:35:50] But you could very well have other kinds of data.
+[00:35:53] So let's assume you want, I don't know,
+[00:35:55] specifically writing about poems in a very specific style.
+[00:35:59] You would have only data about that.
+[00:36:02] And the size of your SFT data, which would be much lower
+[00:36:09] compared to the pretraining one--
+[00:36:11] so if, for instance, it is a very specific use case,
+[00:36:14] you would have of hundreds or thousands--
+[00:36:18] hundreds or thousands.
+[00:36:21] But if you want something bigger, let's say,
+[00:36:23] having an assistant-like behavior on a variety of tasks,
+[00:36:27] you would have maybe millions of examples,
+[00:36:30] but much lower magnitude compared
+[00:36:32] to the pretraining stage.
+[00:36:36] So back to our example-- let's assume I am asking my LLM,
+[00:36:42] "Can I put my teddy bear in the washer?"
+[00:36:45] What is the kind of-- yes?
+[00:36:49] So the question is, do you penalize predicting the input?
+[00:36:52] The answer is no.
+[00:36:54] You only penalize predicting the output.
+[00:36:57] You don't care about the input.
+[00:36:58] The input is given to you.
+[00:37:04] So from this formula you would have,
+[00:37:06] the sum over t of the p theta of--
+[00:37:09] log of p theta of t given x and y.
+[00:37:13] Yeah, x is an input, yes, yeah.
+[00:37:20] So the question is, if you compute the loss of the prompt,
+[00:37:23] would it hurt the performance?
+[00:37:25] So you would not really.
+[00:37:26] So it's not your intention.
+[00:37:27] Your intention is to not predict what the prompt is.
+[00:37:31] So it's just not aligned with what you want to do.
+[00:37:33] Yeah.
+[00:37:35] Any other questions?
+[00:37:39] OK, back to the question that I had for you-- so
+[00:37:44] let's assume we have the same inputs as last time,
+[00:37:48] but this time with an LLM that is not only pretrained, but also
+[00:37:52] instruction-tuned with SFT.
+[00:37:55] What would be the kind of response you would get?
+[00:37:59] No.
+[00:38:01] Yeah, exactly, no, but it will say also some other things.
+[00:38:05] Maybe, "No, it might get damaged,
+[00:38:07] try hand-washing instead," which is much better because it
+[00:38:12] answers your question.
+[00:38:16] But maybe you're someone who wants
+[00:38:21] to have an answer that is a bit more friendly, maybe
+[00:38:26] with some specific tone.
+[00:38:29] So the next section will be about trying to see
+[00:38:35] how we can improve that answer.
+[00:38:38] But before we do that, I wanted to just go over
+[00:38:42] some challenges of the SFT stage.
+[00:38:47] So the first one is, as I mentioned,
+[00:38:49] we need very high-quality data because when
+[00:38:51] we train our model on that SFT data,
+[00:38:54] the model will really behave exactly like we told it to.
+[00:38:58] So we really need to make sure that the data is
+[00:39:00] exactly what we want.
+[00:39:04] The other thing is, if we have too much data with respect
+[00:39:07] to one specific piece, the model may
+[00:39:09] be biased to answer in a very specific way.
+[00:39:12] So there are some challenges with respect
+[00:39:14] to just making sure we have the right distribution
+[00:39:18] of the prompts that we're tuning it on,
+[00:39:20] along with being able to generalize
+[00:39:23] and actually evaluating it.
+[00:39:24] There's one thing that I want to spend a few minutes on,
+[00:39:28] which is the computational part.
+[00:39:32] So as we mentioned, our LLM is typically
+[00:39:36] on the order of billions of parameters
+[00:39:38] or even tens or hundreds of billions of parameters.
+[00:39:43] And your model knows already a lot about text,
+[00:39:49] already knows a lot.
+[00:39:51] And what you're doing here is trying
+[00:39:53] to just steer its behavior towards something that you
+[00:39:58] would like the model to behave.
+[00:40:02] So the question is, do you really
+[00:40:05] need to tweak all the parameters,
+[00:40:09] or can you actually get away by just tweaking some of them?
+[00:40:14] And this is exactly what people have asked.
+[00:40:18] And this is something that motivates LoRA.
+[00:40:20] So who has heard of LoRA?
+[00:40:23] Yeah?
+[00:40:23] Other people?
+[00:40:24] Great.
+[00:40:24] So LoRA stands for Low-Rank Adaptation.
+[00:40:28] And the idea behind LoRA is you actually
+[00:40:31] probably don't need to update all the weights of your model
+[00:40:35] in order to behave a certain way,
+[00:40:36] because you're almost there already.
+[00:40:39] So the idea is you take the learnable parameters that you
+[00:40:46] have, which is typically as a matrix,
+[00:40:51] and you decompose that as your pretrained,
+[00:40:55] already-learned weights, W0, and then some tunable parameters.
+[00:41:04] And these tunable parameters, they're
+[00:41:07] actually living in much lower-rank matrices,
+[00:41:12] so here B and A. And it slashes completely
+[00:41:18] the number of parameters that you need to train on.
+[00:41:20] So the good thing is it's much more efficient,
+[00:41:25] and it turns out to be actually leading
+[00:41:27] to roughly similar performance, depending
+[00:41:30] on the size of your data and your task, which is great.
+[00:41:35] And also-- let's assume, back to our initial example,
+[00:41:39] you have several use cases, and you, let's say,
+[00:41:42] want to tune your model with LoRA for each specific use case.
+[00:41:47] The good thing is that you only need
+[00:41:50] to store the pretrained weights, W0, and then
+[00:41:55] the smaller matrices that are task-specific matrices.
+[00:42:00] So here, for spam, if you train LoRA,
+[00:42:03] you get B and A that are specific to the spam use case.
+[00:42:10] For sentiment, you can reuse W0, but then
+[00:42:12] have the B and A tuned specifically for the sentiment
+[00:42:15] extraction task-- same for translation and so on.
+[00:42:19] So in other words, if you didn't use LoRA,
+[00:42:24] you would have to store all the weights
+[00:42:28] for the first one, all the weights for the second one,
+[00:42:30] and so on.
+[00:42:31] But here you only need to store the delta.
+[00:42:37] So it's also great for storage purposes.
+[00:42:41] So originally, the authors of LoRA, they
+[00:42:47] mentioned people should do that on the matrices that
+[00:42:54] are within the self-attention layer.
+[00:42:57] But since then, people have tried different setups,
+[00:43:00] and they have experimented with different data sets.
+[00:43:04] And the latest recommendation is to actually also leverage
+[00:43:09] the matrices that are within the feedforward neural network,
+[00:43:13] because it's actually where all the compute is happening.
+[00:43:15] This is where a lot of the parameters are.
+[00:43:18] So it actually leads to a lot of performance gain.
+[00:43:22] And as a suggested reading, there is a great article,
+[00:43:27] I believe, from Thinking Machine that
+[00:43:28] is worth reading that is at the bottom of the slides.
+[00:43:31] So I highly recommend taking a look if you're interested.
+[00:43:36] Cool.
+[00:43:38] Yeah?
+[00:43:40] So the question is, let's assume I'm asking a given question.
+[00:43:43] How do I know which model takes the task?
+[00:43:47] Well, the answer here is you would typically not
+[00:43:50] have different weights if you want
+[00:43:52] a general-purpose assistant.
+[00:43:54] And we'll see this a little bit later.
+[00:43:56] Typically, you would train one big model
+[00:43:59] and have it have as much knowledge that you
+[00:44:01] want, as much knowledge as you can, and answer these questions.
+[00:44:06] So here it's mostly if you have some very, very specific use
+[00:44:11] cases.
+[00:44:12] Let's suppose something extremely custom, and you need,
+[00:44:14] let's say, fine-tuning for that.
+[00:44:17] But for the general case, you typically would not do that.
+[00:44:23] Yeah?
+[00:44:24] So the question is, you said the data that is required for SFT
+[00:44:30] is 10 to the power of 6, which is several order of magnitude
+[00:44:33] less than for pretraining.
+[00:44:36] So it's less than pretraining.
+[00:44:37] Why don't you do that?
+[00:44:38] Well, people who want to fine-tune,
+[00:44:41] they're usually people like you and I. They
+[00:44:43] don't have super big hardware.
+[00:44:46] And so we cannot afford having to tune billions and hundreds
+[00:44:50] of billions of parameters.
+[00:44:53] So that's one.
+[00:44:54] The second thing is here, your model is already there.
+[00:44:59] It has all the knowledge.
+[00:45:00] It has everything.
+[00:45:03] It just is not as efficient to have to retune everything,
+[00:45:07] considering that you're almost there.
+[00:45:09] So it's also, just when you think about it,
+[00:45:12] you don't need all these degrees of freedom
+[00:45:14] to get where you want to be.
+[00:45:17] So the question is, are the models
+[00:45:20] across different companies different after this stage?
+[00:45:23] So the answer is, it depends on the architecture that you chose.
+[00:45:27] It depends on the kind of data mixture
+[00:45:29] that they're training this on.
+[00:45:30] And it varies quite a lot from model to model.
+[00:45:34] So yeah, they can be different in some way that
+[00:45:37] is determined by these two factors, typically.
+[00:45:40] So yeah, but the data matters a lot.
+[00:45:45] Cool.
+[00:45:49] Now I want to just motivate the need-- oh, yes?
+[00:45:55] So the question is, how often do you update
+[00:45:57] the parameters of your model?
+[00:45:58] Well it depends which use case you have.
+[00:46:00] So I would say if you're in a use case
+[00:46:03] where you want your model to do a very specific task
+[00:46:08] and you care, let's say, about costs,
+[00:46:11] you don't want to have a big prompt that
+[00:46:14] always tells your model to behave in a certain way.
+[00:46:17] Maybe you want to tweak the weights of your model
+[00:46:21] once with this fine-tuning process,
+[00:46:23] and then re-use that model many times.
+[00:46:27] That is one example, but it highly depends on your use case,
+[00:46:30] I would say.
+[00:46:33] Cool.
+[00:46:35] OK, so far, we've seen how to have
+[00:46:40] our model learn more about knowledge, about text,
+[00:46:44] about code.
+[00:46:45] We learned about how to steer the behavior of our model
+[00:46:48] towards something that we want-- for instance,
+[00:46:51] answering questions.
+[00:46:52] In this section, we will see how we can actually
+[00:46:56] have our model align with human preference data.
+[00:47:02] And in particular, I want to motivate this section
+[00:47:06] with the following example.
+[00:47:08] So let's assume we have our LLM, which we
+[00:47:12] have pretrained and fine-tuned.
+[00:47:14] So it knows how to respond to questions or to instructions.
+[00:47:20] So let's suppose we have "Suggest a new activity I could
+[00:47:22] do with my teddy bear."
+[00:47:24] And our LLM says, well, "I'd suggest you actually do not
+[00:47:27] spend time with the teddy bear."
+[00:47:29] Well, it's an answer, but it's maybe not the answer
+[00:47:32] that you wanted to output.
+[00:47:34] What you want is to tell your model
+[00:47:39] that this is not the kind of output that you want.
+[00:47:43] So, so far, we've only told our model what to do.
+[00:47:48] We have not told it what to not do,
+[00:47:53] because, so far, we've been only saying,
+[00:47:54] OK, next token prediction.
+[00:47:56] Given this input, I want this.
+[00:47:58] And to your point, you had a great point earlier,
+[00:48:00] which is that this data is not something
+[00:48:03] that the model has produced.
+[00:48:06] It is actually modeled.
+[00:48:07] We are forcing that data in.
+[00:48:10] And so this is what we want to resolve here.
+[00:48:14] So in order to resolve that, what we do,
+[00:48:16] the first stage is to collect preference-paired data.
+[00:48:21] So here for a given prompts, we would
+[00:48:24] collect the negative piece, which is here, not spending time
+[00:48:28] with your teddy bear, and then a positive example, which is maybe
+[00:48:31] something that you want about them
+[00:48:35] being great companions for sleep and so on.
+[00:48:37] So you would have prompts with positive/negative example.
+[00:48:43] And the reason why you would frame that as a pairwise problem
+[00:48:48] is just because it is easier to collect such data.
+[00:48:53] So as a human, it is much simpler for you
+[00:48:57] to figure out that something is better than something else,
+[00:49:00] as opposed to stating that something
+[00:49:03] is good in absolute scale.
+[00:49:07] Also, for SFT, I mentioned that the distribution of prompts
+[00:49:11] is typically something that causes the model
+[00:49:14] to be quite sensitive.
+[00:49:15] So here the great thing we will see
+[00:49:18] is that the model is not as sensitive to that aspect.
+[00:49:24] And we want to steer the model to not misbehave in some way.
+[00:49:33] So here, for instance, the fact of responding as, I actually
+[00:49:37] do not suggest you do anything, it's maybe something
+[00:49:41] that the model would respond, and you did your SFT correctly.
+[00:49:44] But sometimes, the model misbehaving
+[00:49:48] actually tells you something about maybe something
+[00:49:51] that happened in the SFT stage that was not intended.
+[00:49:54] So maybe you fed it data that actually you
+[00:49:58] were not intending to do so.
+[00:50:00] The misbehaving parts is also a stage
+[00:50:05] where, looking at your SFT data and just making sure
+[00:50:09] that you have trained your model on data that you intended,
+[00:50:13] with the quality that you intended,
+[00:50:15] it's a good time to do that there.
+[00:50:19] So how do you collect preference data?
+[00:50:22] So you can either have a pointwise scoring system--
+[00:50:25] so you have a prompt and then you have several answers.
+[00:50:28] This one is good.
+[00:50:28] This one is not good on an absolute scale.
+[00:50:31] But we said that this is kind of hard to do as humans,
+[00:50:34] to have an absolute judgment.
+[00:50:39] You can have this pairwise preference data, which
+[00:50:44] is exactly what we just mentioned,
+[00:50:46] where we have two responses, and then we
+[00:50:50] say which one is better than the other.
+[00:50:53] So this is the pairwise setting.
+[00:50:55] And then the listwise setting is you have a prompt
+[00:50:57] and then you have a list of possible answers.
+[00:51:00] And you just rank those from, let's say,
+[00:51:03] most preferred to least preferred way.
+[00:51:06] For simplicity purposes, most of the time, people
+[00:51:12] collect pairwise data when it comes
+[00:51:15] to quantifying what kind of preference you want to inject.
+[00:51:19] So the next question is, how can you
+[00:51:23] know, for data that you don't know outside,
+[00:51:27] how can you know that a given response is good or bad?
+[00:51:34] How can you generalize that?
+[00:51:37] And this is what is motivating the first step
+[00:51:44] that we're going to talk about, which is called reward modeling.
+[00:51:48] So here what we want to do is to build
+[00:51:52] a model that can tell us whether a response to a given prompt
+[00:51:58] is good or not.
+[00:52:01] If we have such a model, then the idea in the second stage
+[00:52:07] is to align our model to align with good behavior, which
+[00:52:15] is quantified by our reward model
+[00:52:18] actually outputting good scores for some answers
+[00:52:22] and avoiding outputs that are associated with lower scores.
+[00:52:31] And this is where RLHF comes into the picture.
+[00:52:36] So who has heard of RLHF?
+[00:52:39] Yeah, a lot of you.
+[00:52:40] So RLHF stands for Reinforcement Learning from Human Feedback.
+[00:52:45] And it is a method to align your model with human preferences.
+[00:52:52] So why is it called RLHF?
+[00:52:55] Because in the first stage, where
+[00:52:58] you want to learn how to distinguish good from bad,
+[00:53:03] you are training your reward model on human preference data.
+[00:53:10] So this is where the human preference gets modeled.
+[00:53:13] And the second stage is to use the model that
+[00:53:16] was trained on human preferences in order to align your model
+[00:53:21] to behave better.
+[00:53:25] So that's the idea.
+[00:53:28] So one thing that I will say is that RLHF, and just,
+[00:53:33] in general, reinforcement learning-based methods,
+[00:53:37] they are quite technical, which is the reason why, today, we'll
+[00:53:43] focus first and foremost on the intuition.
+[00:53:47] And we're keeping all the mathematical part
+[00:53:51] for next lecture.
+[00:53:53] So I hope next lecture you'll come prepared.
+[00:53:55] We'll do some math.
+[00:53:56] But this lecture, we will focus more on the intuition.
+[00:54:01] And the reason why we're distinguishing the two
+[00:54:03] is because it's actually quite technical,
+[00:54:05] and there are some details to take care of.
+[00:54:11] With that being said, let's now go through the two steps
+[00:54:16] that we mentioned-- so reward modeling and reinforcement
+[00:54:19] learning.
+[00:54:20] So reward modeling, our goal is to learn how to distinguish
+[00:54:27] good answers from bad answers.
+[00:54:31] And here, given a prompt and given some answer,
+[00:54:36] we want our model to say, yes, it's
+[00:54:39] a good answer to that prompt, or, no, it's not a good answer.
+[00:54:42] So that is our goal.
+[00:54:44] And in order to do that, people typically
+[00:54:48] use a formulation that is quite specific.
+[00:54:54] It's called the Bradley-Terry formulation.
+[00:54:57] And it is a formulation that models
+[00:55:00] the probability of something being preferred over something
+[00:55:04] else in a very specific manner.
+[00:55:07] So here it's probability of, let's say,
+[00:55:10] yi being preferred over yj, which
+[00:55:14] is equal to the sigmoid of ri minus rj.
+[00:55:20] So we're just saying that yi, there is some reward ri that
+[00:55:26] characterizes it, yj there is some reward
+[00:55:29] rj that characterizes it.
+[00:55:31] What we're saying is the probability
+[00:55:33] of yi being preferred over yj is the sigmoid of the difference
+[00:55:39] between the two rewards.
+[00:55:41] That is what we're saying.
+[00:55:45] So here, as a reminder-- so I'm not sure
+[00:55:46] if you're all familiar with the sigmoid function.
+[00:55:48] The sigmoid function is equal to 1 over 1
+[00:55:51] plus exponential of minus x.
+[00:55:53] So it has the shape and the slides.
+[00:55:57] So when it tends to minus infinity, it's 0,
+[00:56:00] and over plus infinity, it is 1.
+[00:56:05] And the way we're going to train our reward model
+[00:56:09] is we're going to leverage the pairwise preference
+[00:56:13] data that we have collected.
+[00:56:15] So if you remember, we had mentioned
+[00:56:16] that in order to collect preference data,
+[00:56:20] pairwise was the easiest way to do that.
+[00:56:25] So we have for each prompt a winning response and a losing
+[00:56:31] response.
+[00:56:33] So let's assume we have a prompt x.
+[00:56:36] And then we have a response yw, winning response,
+[00:56:41] and a losing response yl.
+[00:56:45] And our goal is to train our reward model in order to say,
+[00:56:50] well, the winning is indeed the high reward
+[00:56:53] and the losing is a lower reward.
+[00:56:56] So the way we train our reward model
+[00:57:00] is by using a pairwise loss.
+[00:57:05] So for a given prompt, we would put yw and yl.
+[00:57:10] We would compute the reward through our model.
+[00:57:14] And then we would update the weights of the model
+[00:57:19] by using this pairwise loss.
+[00:57:22] So this pairwise loss may be a little bit scary.
+[00:57:27] So I'm going to just motivate that.
+[00:57:33] So if you remember for cross-entropy, what we said was,
+[00:57:38] intuitively, you want to learn parameters theta that
+[00:57:43] maximize the probability of your model seeing the training set.
+[00:57:48] And so here the event that you want to model is yw--
+[00:57:55] so winning response being preferred
+[00:57:58] over a losing response.
+[00:58:02] So here what you want to maximizes the probability
+[00:58:08] that your model says that, let's say,
+[00:58:14] winning response is preferred over a losing response, roughly
+[00:58:19] speaking.
+[00:58:22] So if you remember, so that piece
+[00:58:25] the Bradley-Terry formulation, what does it tell us?
+[00:58:30] It is equal to sigma of r theta, which
+[00:58:36] is your reward model, of-- so your prompts
+[00:58:40] and the winning answer minus the reward model of your prompt
+[00:58:46] and the losing answer.
+[00:58:50] So this is what the Bradley-Terry formulation
+[00:58:53] tells us.
+[00:58:55] So you want to maximize this across all your pairs.
+[00:59:02] But as we said, you like logarithm
+[00:59:07] because it is monotonic.
+[00:59:09] And these quantities can be very small
+[00:59:12] and can lead to instability.
+[00:59:13] So you take the log.
+[00:59:16] And actually, in the machine learning,
+[00:59:18] you like to minimize things as opposed to maximizing things.
+[00:59:21] So here you want to maximize this,
+[00:59:23] maximizing the log of this, which is the same as minimizing
+[00:59:27] minus the log of this.
+[00:59:31] And if you look at the slide, it's exactly what is written.
+[00:59:36] So you want to minimize minus log
+[00:59:41] of sigma of reward of winning minus reward of losing.
+[00:59:47] That is just a result of the Bradley-Terry formulation.
+[00:59:52] So let's assume you do that.
+[00:59:53] So in order to-- yeah?
+[00:59:56] Yeah, the question is, what is e?
+[00:59:57] Yes, it's the expectation over your whole data.
+[00:59:59] So you can think of it as a sum or an average if you want.
+[01:00:03] So the question is, what is the architecture of your reward
+[01:00:06] model?
+[01:00:06] Well, there's been several ways people
+[01:00:09] have been modeling rewards.
+[01:00:11] One way is to leverage the backbone of your LLM.
+[01:00:17] But your LLM is trained in a next-token-prediction fashion.
+[01:00:22] So what you can do is if you put some inputs,
+[01:00:27] you can take the embedding representation corresponding
+[01:00:32] to the last token that was input and project that
+[01:00:35] onto some space.
+[01:00:36] You can do that.
+[01:00:37] Another way you can do that is you
+[01:00:39] can use an encoder-only model.
+[01:00:40] So you put everything, self-attention, and just project
+[01:00:44] on the data.
+[01:00:45] So the first method, the good thing
+[01:00:47] is that you can leverage the backbone that you already have.
+[01:00:51] So yeah, you can do either way.
+[01:00:52] But typically, you can do one of these two.
+[01:00:57] OK, cool.
+[01:00:59] So the label here is human preference
+[01:01:03] because you need that in order to say it's RLHF.
+[01:01:08] And actually, I just realized, yeah,
+[01:01:12] this was exactly my next slide.
+[01:01:13] So the kind of model would either
+[01:01:14] be a backbone of LLM with the classification
+[01:01:18] head on the last token that you want to leverage
+[01:01:23] or an encoder-only model.
+[01:01:28] Cool, OK, so that first stage, you
+[01:01:31] went from just having preference pairs
+[01:01:35] and just wanting to learn good responses from bad responses
+[01:01:40] to actually having a model that tells you,
+[01:01:42] for a given prompt and a given response,
+[01:01:45] whether that is actually a good response or a bad response.
+[01:01:49] So now the second stage, which is the more mathematically
+[01:01:52] involved stage, is the reinforcement learning stage.
+[01:01:58] And here the purpose of that stage
+[01:02:01] is to change the weights of your model
+[01:02:04] so that it aligns with the rewards that are mentioned
+[01:02:08] by that reward model.
+[01:02:10] So how would you do that?
+[01:02:14] So here, you would have a prompt and ask your model
+[01:02:19] to generate a response.
+[01:02:23] And here, you want to know if this is the kind of behavior you
+[01:02:27] want to promote or demote.
+[01:02:29] So here what you would do is you would
+[01:02:31] input your input prompts and the response
+[01:02:34] into your reward model--
+[01:02:37] let's suppose it says, no, it's a bad response--
+[01:02:40] and use that judgment to update the weights of your LLM.
+[01:02:49] So there's a lot of math involved.
+[01:02:51] But long story short, the reward model
+[01:02:54] is something that you have trained
+[01:02:56] in stage 1 that is now frozen.
+[01:02:59] The weights that you're changing are the weights
+[01:03:01] of your LLM, which is the LLM that you
+[01:03:03] want to align the behavior for.
+[01:03:07] And the way you do that is by using an objective function that
+[01:03:13] is typically composed of two parts.
+[01:03:16] The first part is trying to maximize the rewards,
+[01:03:21] but also to not deviate too much from the reference model,
+[01:03:27] because, similar to my earlier comment with LoRA,
+[01:03:30] with respect to the pretrained model,
+[01:03:33] your model here is already good enough.
+[01:03:35] It knows how to respond to questions.
+[01:03:38] It knows a bunch of things.
+[01:03:40] You don't want to change your weights too much.
+[01:03:44] And the thing is, your reward model is not perfect.
+[01:03:48] Sometimes it will say, oh, it's bad, whereas it's good.
+[01:03:52] So you don't want your model to go too far from your reference
+[01:03:57] model.
+[01:03:58] So you typically have an additional term
+[01:03:59] that penalizes too big of a difference with respect
+[01:04:03] to the reference.
+[01:04:05] So here, typically, the number of observations
+[01:04:08] is orders of magnitude higher than the reward model.
+[01:04:12] And you would initialize your model at the SFT model
+[01:04:15] that you obtained previously.
+[01:04:17] And you would have an objective function, which
+[01:04:19] is exactly what I mentioned, a trade-off between two pieces,
+[01:04:25] which are maximizing the rewards,
+[01:04:27] but also not deviating too much from the base model.
+[01:04:31] And there's actually a key term that I want to mention here.
+[01:04:35] People sometimes say reward hacking.
+[01:04:39] So reward hacking is the fact or the phenomenon
+[01:04:42] of your model trying to please the reward model by going
+[01:04:48] into the direction that the reward model likes without this
+[01:04:52] being necessarily a good thing, if you just
+[01:04:55] forget about your reward model from your perspective,
+[01:04:59] just because the reward model is not perfect.
+[01:05:04] Yeah?
+[01:05:07] It's a great question.
+[01:05:08] So your question is, how do we update the weights of the model?
+[01:05:12] And we'll need to go into details for that.
+[01:05:14] So save your question for next week.
+[01:05:17] We'll go into that in detail.
+[01:05:19] But the one thing I want you to remember here is in this stage,
+[01:05:24] the reward model is fixed.
+[01:05:25] We're not updating its weights.
+[01:05:27] We're only updating the weights of the LLM.
+[01:05:31] And we will see next week exactly how we do that.
+[01:05:37] Cool.
+[01:05:38] So we just saw RLHF.
+[01:05:41] You need to train a reward model and then do RL on your LLM
+[01:05:46] in order to update its weights in order
+[01:05:48] to align the behavior with what you want.
+[01:05:50] The problem is, RL is complicated.
+[01:05:54] You need a reward model.
+[01:05:56] A lot of attention is needed to select the hyperparameters
+[01:06:00] and so on, which is why people have tried to formulate
+[01:06:04] this problem in a supervised manner, which
+[01:06:08] is the idea behind DPO, which stands for Direct Preference
+[01:06:14] Optimization.
+[01:06:15] So we will not go into the math here,
+[01:06:18] but I just want to tell you that the loss function that
+[01:06:22] is derived is something that is actually
+[01:06:24] very similar to the loss function
+[01:06:28] that we obtained for the reward model.
+[01:06:31] If you assume that r is equal to some quantity
+[01:06:36] times the logarithm of the probability from the model
+[01:06:41] that you're trying to tweak over the reference model,
+[01:06:46] and if you see that, you will also
+[01:06:49] see that this loss function incentivizes your model
+[01:06:55] to increase the probability of generating the winning answer
+[01:07:01] compared to the reference.
+[01:07:03] And it incentivizes your model to decrease
+[01:07:08] the probability of generating a losing answer compared
+[01:07:11] to the reference.
+[01:07:15] So I'll go through that super quickly.
+[01:07:19] So here what we're saying is something,
+[01:07:24] let's say, minus expectation of, let's say, log of your sigmoids,
+[01:07:34] and then you have this huge thing, like minus rl--
+[01:07:43] so your loss is such that you want rw minus rl
+[01:07:51] to be as big as possible.
+[01:07:54] So what does that mean?
+[01:07:56] So if you say r is equal to some quantity times
+[01:08:02] log of probability from the model that you're tweaking to,
+[01:08:08] let's say, generate an answer over probability
+[01:08:12] of your reference model to generate an answer--
+[01:08:17] so what this is saying is in order for the difference
+[01:08:22] to be big, which is what your loss is trying to do,
+[01:08:27] it will try to make rw as big as possible.
+[01:08:31] So how can I do that?
+[01:08:33] It is by having the probability of the model
+[01:08:37] we're trying to tweak be higher than the probability
+[01:08:40] of your reference model for that output given the inputs.
+[01:08:45] So this means that we're trying to increase
+[01:08:49] the probability of the winning answer being generated.
+[01:08:55] And what you want to do is to decrease rl.
+[01:08:58] How do you decrease rl?
+[01:09:00] You actually decrease the probability
+[01:09:03] of your model generating that losing answer given your input.
+[01:09:10] Yes?
+[01:09:12] So the question is, what is pi?
+[01:09:13] So here pi is--
+[01:09:15] we will see next week that this model LLM,
+[01:09:19] we will call it a policy.
+[01:09:21] And when you talk about policy, you typically
+[01:09:24] talk about its predicted probability in terms of pi.
+[01:09:27] So yeah, so this notation is rl-specific.
+[01:09:30] And yeah-- to your point, yes.
+[01:09:34] OK, great.
+[01:09:35] I just want to say that this formula can be scary.
+[01:09:39] But if you take the Bradley-Terry formulation
+[01:09:43] in mind and interpret the left and right term
+[01:09:47] as a function of the ratio between the model
+[01:09:50] that you're trying to tweak over the reference model,
+[01:09:54] if you think about that this way,
+[01:09:57] then, hopefully, it makes a bit more sense.
+[01:10:01] Yeah?
+[01:10:02] So yeah, the question is, is the reference model
+[01:10:04] the supervised fine-tuned model?
+[01:10:06] Yes, it is the model that you start from when you
+[01:10:10] perform that training, yeah.
+[01:10:14] OK, cool.
+[01:10:16] Moving on, so you will see and hear RLHF and DPO out there.
+[01:10:22] I just want to tell you a little bit about the differences.
+[01:10:25] So RLHF, as we mentioned, is composed of two stages.
+[01:10:30] The first stage is reward modeling.
+[01:10:33] The second stage is reinforcement learning.
+[01:10:36] So there is models to train, and it can be compute-heavy,
+[01:10:43] whereas DPO is a supervised learning way to do that.
+[01:10:49] But one thing with DPO is it is not
+[01:10:55] penalizing the loss based on outputs
+[01:10:59] that the model is producing.
+[01:11:01] It is actually on fixed outputs.
+[01:11:03] So to your point, this problem is still present here.
+[01:11:06] And we will see that in a few slides,
+[01:11:09] that RLHF is an on-policy method,
+[01:11:13] because it is actually leveraging the actual outputs
+[01:11:17] from the LLM, which contrasts with off-policy methods, which
+[01:11:23] are actually training the model based on fixed outputs that
+[01:11:28] are not necessarily generated by the model.
+[01:11:33] So with that, going back to our example,
+[01:11:37] now let's assume we have the same inputs.
+[01:11:40] Now it's pretrained.
+[01:11:41] It's instruction fine-tuned.
+[01:11:43] And it's also preference-tuned.
+[01:11:45] Now we will have a response that is maybe more friendly in tone.
+[01:11:50] So here, "Can I put my teddy bear in the washer?"
+[01:11:53] Instead of saying, "No," we will have something that is maybe
+[01:11:56] more friendly.
+[01:11:57] No, "It's better not to.
+[01:11:58] Your teddy could get hurt!
+[01:12:00] A gentle hand wash is safer."
+[01:12:02] So you can use this method to, let's say,
+[01:12:05] change the tone as an example.
+[01:12:08] So now I want to talk to you about a topic that
+[01:12:10] has increased in importance in the past two years.
+[01:12:17] And this is the topic of reasoning,
+[01:12:20] which I will define here in a very simple way as the ability
+[01:12:24] to solve a problem.
+[01:12:27] So just to contrast prompts that are nonreasoning versus
+[01:12:32] reasoning-- so here, if you ask a knowledge-based question,
+[01:12:36] what is the course code for Stanford's Transformers & LLMs
+[01:12:40] class?"
+[01:12:41] Well, it's something that you know or you don't know.
+[01:12:45] It is different from, let's say, a math question.
+[01:12:47] Let's assume you ask, OK, so your bear was born in 2020.
+[01:12:51] How old is the bear now?
+[01:12:53] You need to think a little bit about what year we're in
+[01:12:56] and what is the difference in year in order to get the answer.
+[01:13:01] So this right example is the kind
+[01:13:04] of prompts that we're trying to improve the model
+[01:13:08] performance on.
+[01:13:11] And if you remember, at the end of last week's lecture,
+[01:13:17] we saw a prompt technique called Chain of Thought that
+[01:13:21] tried to elicit this behavior from the model
+[01:13:27] by incentivizing it to reveal its reasoning chain
+[01:13:32] through a few-shot examples.
+[01:13:33] So here we saw that if we told the LLM, well,
+[01:13:37] let's say, on this example, how old is the bear,
+[01:13:41] so in order to get to the answer,
+[01:13:42] I want you to output this chain.
+[01:13:45] Then the LLM can learn to output a reasoning chain
+[01:13:48] before the answer.
+[01:13:51] The problem with that method is we
+[01:13:54] don't want to always tell the LLM to do that.
+[01:13:57] We want the LLM to do that by itself.
+[01:14:01] And this is exactly what we will see here.
+[01:14:05] So in 2024, in September of 2024, OpenAI, I believe,
+[01:14:13] was the first company to tell about improved performance
+[01:14:20] on math and coding tasks using this technique.
+[01:14:25] And shortly after that, almost all other frontier labs
+[01:14:31] also had models that used the same strategy.
+[01:14:38] And we will see exactly what that strategy is.
+[01:14:43] In particular, DeepSeek-R1 was the first open-weight model
+[01:14:50] in January of 2025 to actually go through the how.
+[01:14:57] So that paper is probably the first paper
+[01:15:00] that really explains how reasoning models are trained.
+[01:15:05] And we will see exactly how we do that here.
+[01:15:07] So if we were in, let's say, 2025,
+[01:15:12] the way you would recognize a reasoning model
+[01:15:15] is because it was written everywhere on the UI.
+[01:15:19] So here, an example of OpenAI-- there
+[01:15:21] was a model called ChatGPT-5 Thinking.
+[01:15:24] So here it's a hint.
+[01:15:25] And then the reasoning chain, because it
+[01:15:27] thought for some seconds, it used to output the actual chain,
+[01:15:32] maybe in a summarized way, and you would have also an option
+[01:15:36] to think more.
+[01:15:39] But fast-forward to today-- these models
+[01:15:42] are actually everywhere.
+[01:15:44] Almost all models are reasoning models these days.
+[01:15:47] And so the only place where, let's say,
+[01:15:49] if you interact with OpenAI, the ChatGPT and so on,
+[01:15:53] the only place you would see a hint of the model being
+[01:15:56] a reasoning model is the thinking effort.
+[01:16:02] So one thing that I want to say is that the reasoning chain
+[01:16:08] is something that is actually important
+[01:16:11] because it encapsulates the previous input that the user has
+[01:16:18] mentioned to the model.
+[01:16:20] And I'm not sure if you've heard in the news,
+[01:16:23] but a couple of months ago, there
+[01:16:27] was a paper that showed that, for some third-party providers,
+[01:16:34] you could actually recover the full reasoning
+[01:16:38] chain by playing with the API.
+[01:16:43] And the reason why that paper did a lot of noise
+[01:16:47] is because these reasoning chains,
+[01:16:50] they can actually contain a lot of information
+[01:16:53] about the user, about the chat, what was mentioned before,
+[01:16:57] which is probably not something that you want to expose,
+[01:17:01] for safety reasons.
+[01:17:03] But also, another reason is to not have the reasoning chain
+[01:17:07] revealed for other people to train on it,
+[01:17:11] because we will see that having a high-quality reasoning chain
+[01:17:16] can actually improve the performance of your model--
+[01:17:20] so just to say that in general, the reasoning chain
+[01:17:24] is something that people are trying to protect, to not show,
+[01:17:29] for these two reasons.
+[01:17:31] And this is the reason why you would
+[01:17:33] see the UI that has changed quite a bit between 2025 5
+[01:17:37] and now, because right now, actually don't really
+[01:17:41] get the reasoning chain out of the box like you used to.
+[01:17:45] So the idea is to incentivize the model
+[01:17:52] to actually output a reasoning chain before getting its answer.
+[01:17:58] So just on the what is what, the reasoning chain
+[01:18:03] is actually considered as a model output.
+[01:18:07] So if you think about output token,
+[01:18:09] you actually need to consider the reasoning as part of it.
+[01:18:14] So if you were to consider using this reasoning models,
+[01:18:19] and if you have a finite budget, just
+[01:18:22] keep in mind that you're being charged for both what you see,
+[01:18:27] but also, the typically hidden reasoning
+[01:18:29] chain that the model produces.
+[01:18:32] And so here I just highlighted in the slides
+[01:18:35] the parts in the main providers where this is mentioned.
+[01:18:38] Yeah?
+[01:18:40] Yep.
+[01:18:40] So the question is, can the model decide
+[01:18:42] on what to reason versus not?
+[01:18:44] Yes, typically, it has a way to decide.
+[01:18:47] It's part of the training process.
+[01:18:49] You as a user can also set that, typically
+[01:18:52] by some toggle thinking effort.
+[01:18:54] But even within that, typically, models
+[01:18:56] are trained to categorize prompts that are maybe
+[01:19:01] worth less effort versus more.
+[01:19:03] So short answer is yes.
+[01:19:07] So moving on, the main question now
+[01:19:10] is how we can train such a model, how
+[01:19:12] we can incentivize a model to output a reasoning
+[01:19:16] chain before its answer.
+[01:19:18] So the idea is to train our model on rewards,
+[01:19:26] but this time, they're not the rewards
+[01:19:28] that we saw a few slides ago.
+[01:19:30] They are actually verifiable, because when
+[01:19:33] it comes to math and coding problems,
+[01:19:38] when you get an answer, you can tell if the answer is
+[01:19:43] right or wrong.
+[01:19:44] So I'll give you an example.
+[01:19:46] Let's assume you do a coding task.
+[01:19:48] You have a solution.
+[01:19:50] How do you know if your solution works?
+[01:19:52] Well, you run through some test cases.
+[01:19:55] Let's assume you want to resolve a math problem.
+[01:20:00] How do you know if it's correct?
+[01:20:01] Well, you just compare your answer with the ground truth?
+[01:20:06] So the nice thing with this setup
+[01:20:14] is that for every model answer, you
+[01:20:18] can tell if your model had it right or wrong.
+[01:20:24] So you can design a reward that relies on the final answer,
+[01:20:32] and also on the fact that the answer needs
+[01:20:36] to contain a reasoning chain.
+[01:20:40] And so here you can actually have
+[01:20:42] a reward that is composed of the answer being correct
+[01:20:47] and the answer containing a reasoning chain-- so typically
+[01:20:51] having reasoning tokens.
+[01:20:57] And the way you would train your model
+[01:20:59] would be using rl algorithms.
+[01:21:03] So we will see next week in-depth one such algorithm
+[01:21:07] that has grown in popularity that is called GRPO.
+[01:21:11] That stands for Group Relative Policy optimization.
+[01:21:14] Don't worry the math.
+[01:21:15] We'll see it next week.
+[01:21:16] But at a very high level, what we're doing is given a query,
+[01:21:20] given a prompt, we're telling our LLM,
+[01:21:22] which is here, the policy, to output several responses.
+[01:21:28] And we figure out if these responses are correct or not.
+[01:21:32] And what we do is we compute advantages,
+[01:21:37] which is how much better a given answer is relative to the group.
+[01:21:44] If it's much better, let's have the model do more of that.
+[01:21:50] If not, let's have the model do less of that,
+[01:21:53] and still by penalizing with respect to a reference model.
+[01:21:58] So again, the objective is maximize the advantages
+[01:22:03] while not deviating too much from the base model.
+[01:22:06] So here it's the same mindset.
+[01:22:09] The main difference here is you're actually
+[01:22:13] relying on verifiable rewards.
+[01:22:15] You don't need a reward model.
+[01:22:17] So here you're just using the knowledge
+[01:22:20] that you have on the ground truth of a problem
+[01:22:24] and comparing whether the answer that is output by the model
+[01:22:29] is matching the ground truth.
+[01:22:36] Does that make sense?
+[01:22:38] So again, I want to emphasize next week we'll see the details.
+[01:22:43] If you do that, then you will see that your model actually
+[01:22:48] gets better and better at these reasoning problems.
+[01:22:52] So on the left side, we have the performance
+[01:22:55] of the model as a function of the rl step.
+[01:22:58] So it's a measure of how far you are in the training process.
+[01:23:01] So here it's getting better and better.
+[01:23:03] And on the right side, you have the empirical length
+[01:23:07] of the reasoning chain, which gets increasingly high.
+[01:23:15] I think I already told you, but lecture 4
+[01:23:17] is where we'll talk about the details.
+[01:23:19] So here, if we have some reasoning problem,
+[01:23:22] we tell the model, well, now, the model
+[01:23:25] can answer in a way that aligns with what we want.
+[01:23:32] There is something, before giving it
+[01:23:34] to Shervine, that I want to talk to you about.
+[01:23:36] There is a limitation, core limitation
+[01:23:38] of this approach, which is that you're actually
+[01:23:41] getting a very coarse reward.
+[01:23:46] You're getting a reward for your whole output.
+[01:23:50] It's either the whole output is correct
+[01:23:53] or the whole output is incorrect.
+[01:23:56] So that is one problem.
+[01:24:00] The second problem is that the methods that we saw that
+[01:24:05] had a token-level signal, they had the limitation
+[01:24:11] of being based on sequences that were actually not
+[01:24:14] produced by the model.
+[01:24:16] So we call such sequences off-policy.
+[01:24:19] So it's an off-policy method.
+[01:24:21] So it's a dense signal, but it's not
+[01:24:23] produced by the model, which can deviate from actually what
+[01:24:27] the model is generating.
+[01:24:31] So we have plus.
+[01:24:32] It's a dense signal, but it's not from the model.
+[01:24:35] And on the other side, what we just saw with preference tuning
+[01:24:38] and with how to train a reasoning model
+[01:24:42] is that we're actually leveraging outputs
+[01:24:46] from the model at training time, but we
+[01:24:50] are relying on a sparse signal, which is a reward that
+[01:24:54] is at the sequence level.
+[01:24:56] We don't have any token-level way
+[01:24:58] of just figuring out what is good,
+[01:25:00] what is not good, at least for GRPO.
+[01:25:04] And so there is a new set of training strategies
+[01:25:10] that are emerging.
+[01:25:12] And there's one such technique that
+[01:25:13] has been becoming more and more popular,
+[01:25:16] which is called on-policy distillation.
+[01:25:20] So the idea behind this method is
+[01:25:22] to combine the best of both worlds.
+[01:25:26] So given a prompt, your model is generating a response.
+[01:25:33] But what you're doing is instead of relying
+[01:25:38] on a sparse signal that is across the whole sequence,
+[01:25:43] you're actually asking a teacher model
+[01:25:47] to evaluate every single token that was generated.
+[01:25:53] And you penalize deviations between your model, the student
+[01:25:58] model, and the teacher model.
+[01:26:00] So at a very high level, here, it's
+[01:26:02] as if you were putting the whole sequence
+[01:26:08] that the student is generating.
+[01:26:09] So think of it as just one at a time, you generate the sequence.
+[01:26:15] And you ask the teacher what its prediction would be.
+[01:26:20] And you compare the prediction of the student and the teacher.
+[01:26:24] And you penalize deviations.
+[01:26:27] So the good thing here is it is on-policy
+[01:26:31] because you're actually using the generation of the student.
+[01:26:35] And it is also dense because you're
+[01:26:38] getting a token-level signal.
+[01:26:42] So you have a few variations of that strategy.
+[01:26:45] So how do you come up with the teacher?
+[01:26:47] If a teacher is not there, there is a variation
+[01:26:49] called on-policy self-distillation, which
+[01:26:53] is you use the same model for a task,
+[01:26:57] but you tell that teacher model, which is the same model,
+[01:27:01] you tell it the answer.
+[01:27:03] So you tell it the answer so it knows how to steer its response.
+[01:27:10] And this technique is being incorporated in, I would say,
+[01:27:16] most of the frontier open white models.
+[01:27:19] And as an example here, you will see
+[01:27:23] that you have setups where you actually
+[01:27:26] have specialized teachers-- for instance, one that
+[01:27:29] is very good at math, one that is very, very good at, let's
+[01:27:32] say, engineering.
+[01:27:34] And then what you do is you perform a dense supervision
+[01:27:38] of the model you're trying to train versus these teacher
+[01:27:42] models.
+[01:27:46] And with that, I'll give it to Shervine.
+[01:27:50] Thank you, Afshine.
+[01:27:52] So in this last part, we're going
+[01:27:54] to focus on a practical use case.
+[01:27:57] We're going to see everything that Afshine
+[01:27:59] mentioned in real life.
+[01:28:01] So there is this website called Artificial Analysis Intelligence
+[01:28:08] Index that I recommend.
+[01:28:10] In case you don't know about it, it's
+[01:28:11] an aggregator of benchmarks, and it
+[01:28:14] translates into a single number, roughly
+[01:28:18] what counts as intelligence these days.
+[01:28:20] So it's a good way to rank models between each other.
+[01:28:23] And there is this filter called Open Source Models.
+[01:28:28] So usually, these open-source models,
+[01:28:30] they are slightly behind the true frontier
+[01:28:32] from closed-source models.
+[01:28:35] But the great thing about them is that oftentimes they
+[01:28:39] tell all the secret recipe behind the preparation
+[01:28:42] of these LLMs and their open weights.
+[01:28:46] And so we see this ranking.
+[01:28:49] We have a few strong models.
+[01:28:51] And there is one in particular that has
+[01:28:54] a great technical report, GLM--
+[01:28:57] so GLM-5, which came out earlier this year.
+[01:29:01] And this will be one that we will anchor on
+[01:29:04] to see everything that Afshine mentioned into practical terms.
+[01:29:10] So we're going to go through each stage of training
+[01:29:14] the large language model together,
+[01:29:16] and then we're going to see what they have put into each stage.
+[01:29:21] So the first stage that Afshine mentioned
+[01:29:23] was pretraining, where the main goal is to learn about language.
+[01:29:27] So they put some web data.
+[01:29:31] So what you use is usually Common Crawl
+[01:29:35] that has about everything on the internet.
+[01:29:39] And a lot of it these days is polluted
+[01:29:42] by AI-generated contents and other things, which
+[01:29:46] is why you have heuristics based on this data that
+[01:29:51] trims everything down.
+[01:29:53] So you have some papers that go into the reasoning of how
+[01:29:58] you do that.
+[01:29:59] Usually, you have about 1% of your input in the end.
+[01:30:03] So it's a great filter.
+[01:30:05] And then it's a good time to teach the model
+[01:30:08] about main lines of knowledge.
+[01:30:10] So usually, you have authoritative websites,
+[01:30:13] such as Wikipedia, that give a lot of great things
+[01:30:17] on general knowledge.
+[01:30:18] But you have other facts that might not
+[01:30:20] be on these main websites, where you need more care into curating
+[01:30:25] what goes into your data mix.
+[01:30:28] So Afshine mentioned the reasoning aspect
+[01:30:31] as being one that is very important these days.
+[01:30:34] So alongside coding, that is at the foundation of everything
+[01:30:38] that powers today's systems.
+[01:30:41] So when we talk about agents or we talk about them
+[01:30:44] in the second part of the class, these
+[01:30:47] are mostly coding problems that are put at different flavors, so
+[01:30:53] which is why, as early as pretraining,
+[01:30:55] we want to train next-token prediction on coding data-- so
+[01:30:59] typically GitHub and the likes.
+[01:31:02] And then sometimes you have some languages
+[01:31:04] that you care about that might not be as present in your mix.
+[01:31:07] So in particular, mobile-specific data
+[01:31:13] is an example of one.
+[01:31:14] So this is where some curation is needed.
+[01:31:19] And then, finally, you use material
+[01:31:24] that has this reasoning-like type of data
+[01:31:30] to augment your training.
+[01:31:32] So you also have things like papers and math
+[01:31:36] and science-focused.
+[01:31:40] So in terms of numbers, as Afshine mentioned,
+[01:31:43] the pretraining stage usually operates
+[01:31:46] on a low-context-length regime.
+[01:31:48] So GLM-5 was at 4K, about, tokens.
+[01:31:53] And some orders of magnitude--
+[01:31:55] so it's divided pretraining into two stages, so first
+[01:31:59] one that is very coarse, where we just
+[01:32:01] want to learn about language structure,
+[01:32:03] where we focus on web data.
+[01:32:07] And then, once this is done, then
+[01:32:09] there is a mix of coding and reasoning
+[01:32:12] that comes in, alongside still web, but at a lesser extent.
+[01:32:17] And now I'm going to talk about exactly
+[01:32:20] what happens at training time.
+[01:32:22] So there was a question here on what do you actually learn.
+[01:32:26] So here we learn purely next-token prediction.
+[01:32:30] And our goal is not to generate useful sentences.
+[01:32:34] We just want to learn large concepts about language.
+[01:32:38] So we do not have a nicely-formatted speaking
+[01:32:42] sequence end of sequence batch that we just put it as is.
+[01:32:47] We have a ton of data that we chunk,
+[01:32:51] and then we concatenate documents
+[01:32:52] that go together at once.
+[01:32:56] So you will see things like documents that
+[01:33:00] are cut and then concatenated.
+[01:33:04] And you don't necessarily start your batch
+[01:33:06] with the beginning-of-sequence token, for example.
+[01:33:09] So you do that in order to fill your context length.
+[01:33:16] And again, we mentioned a typical order of magnitude
+[01:33:19] is like a few K.
+[01:33:21] And now I want to focus a bit more
+[01:33:26] on what I mentioned on the importance of curating
+[01:33:30] your data.
+[01:33:31] So in the first LLMs that came out in 2022, it was great.
+[01:33:38] The internet was mostly human-generated data.
+[01:33:41] So you didn't need to worry about the quality of who
+[01:33:46] put data in.
+[01:33:47] And I want to talk about a phenomenon called
+[01:33:49] model collapse.
+[01:33:52] So who has heard about model collapse?
+[01:33:55] Yeah, a few folks.
+[01:33:56] So the thing is, imagine you have a perfect model,
+[01:34:02] and let's say you have human-generated data out there.
+[01:34:07] Let's say you want to train your model.
+[01:34:09] You will sample a finite number of samples
+[01:34:13] from this larger corpus.
+[01:34:16] But the thing is the distribution
+[01:34:18] that you have out there is very diverse.
+[01:34:22] So you might have some nonzero probability for things
+[01:34:25] that are super long-tail.
+[01:34:28] And the thing is, since your sampling is finite,
+[01:34:31] you will not capture all these details
+[01:34:35] into training your model, which means
+[01:34:38] that the output of your model is by nature doomed.
+[01:34:41] So you will not have the same distribution as output.
+[01:34:44] And this is with the assumption that the model is perfect.
+[01:34:47] But on top of that, just imagine the model is an approximator.
+[01:34:51] It will not output the perfect distribution.
+[01:34:54] It is taught to learn.
+[01:34:56] And to add insult to injury-- and you might have seen that
+[01:35:01] into your own use of LLMs--
+[01:35:03] you have, at later stages, some preferences
+[01:35:07] that vendors and experts in language
+[01:35:10] insert into the behavior of the LLM.
+[01:35:12] So if I talk to you about things that are load-bearing,
+[01:35:15] byte-identical, that might ring a bell about your experience
+[01:35:19] with LLMs.
+[01:35:20] These are heavily upweighted in frequency with respect
+[01:35:24] to the true distribution.
+[01:35:26] So this is another problem that adds
+[01:35:29] to this initial observation, which is why all the curation
+[01:35:35] techniques that these papers try to achieve at first
+[01:35:39] become really important.
+[01:35:41] And then I know there was a question a lecture or two ago
+[01:35:45] about the number of epochs that this kind of data runs on.
+[01:35:49] So usually it's [? Of1. ?] But in this paper,
+[01:35:53] the data that is of higher quality per classifiers
+[01:35:56] might run for a bit more.
+[01:36:00] So the second part, which is midtraining--
+[01:36:03] so Afshine mentioned it's where you have higher-quality data
+[01:36:07] come into the picture.
+[01:36:08] And in the case of GLM-5, the goal
+[01:36:11] was purely to increase context length,
+[01:36:15] and do it in a way that works, which is why the data mixture is
+[01:36:22] mostly composed longer-form data that
+[01:36:26] matches the domains that we're interested in.
+[01:36:28] So for example, in the case of code,
+[01:36:31] we are looking at PRs with issues and then code diffs.
+[01:36:35] So these typically occupy much more context length.
+[01:36:40] And then you can afford to put in entire books now and so on.
+[01:36:47] And I had mentioned last time the problem
+[01:36:50] of context rot, where, at larger context length,
+[01:36:55] the LLM might have trouble to remember a fact that
+[01:36:58] was mentioned earlier on.
+[01:37:00] So this is also a nice place to take that
+[01:37:03] into account, where, in synthetic data,
+[01:37:07] you might want to inject some fact in the middle of it
+[01:37:12] and then try to refer of it later on.
+[01:37:15] So it's another nice place for doing so.
+[01:37:19] And some orders of magnitude-- so
+[01:37:22] you have a similarly, [? then ?] pretraining several stages--
+[01:37:26] so a first one that focuses on coding,
+[01:37:28] and then a second one on other longer-form data.
+[01:37:34] And then the strategy to train these is slightly different.
+[01:37:38] So this paper mentions exactly what's the difference.
+[01:37:41] So here, instead of chunking everything, just putting
+[01:37:45] all to predict the next token-- we
+[01:37:47] are slightly smarter about it.
+[01:37:49] We try to pack documents in a way that they fit
+[01:37:53] and that they're not cut.
+[01:37:55] So it's called the best-fit packing.
+[01:37:57] And if there is too much left, we may pad the context.
+[01:38:05] And yeah, just like pretraining, it's
+[01:38:07] next token prediction, still.
+[01:38:11] So now we want to make the model a useful assistant.
+[01:38:17] So this is the SFT stage, where data
+[01:38:21] that is of much higher quality comes in.
+[01:38:23] And then the orders of magnitude of the tokens
+[01:38:26] that go into training just go down much more.
+[01:38:29] So there is an emphasis on general helpfulness.
+[01:38:32] And then, just like Afshine mentioned, today's models,
+[01:38:35] they have seen that focusing on reasoning is high-value.
+[01:38:38] So there is a lot of reasoning and encoding
+[01:38:40] data injected there.
+[01:38:43] And the paper mentions that there
+[01:38:47] is the strategy of inserting the reasoning that leads to a given
+[01:38:52] tool calls, and that is also great for training the reasoning
+[01:38:58] abilities when the model wants to perform a tool call.
+[01:39:02] So you will see interleaved reasoning and the presence
+[01:39:07] of think tokens.
+[01:39:08] So I think we'll mention it next time more in detail.
+[01:39:10] So all this reasoning that counts in your
+[01:39:13] [? bill ?] and that you don't see,
+[01:39:15] the reason why you don't see it is that it's between tokens
+[01:39:19] called think tokens.
+[01:39:20] So it's a way for the model to have
+[01:39:23] a scratchpad of where it needs to go,
+[01:39:25] but it doesn't display it to you.
+[01:39:29] And moving on, this time, we do not
+[01:39:32] do pure next-token prediction.
+[01:39:35] So everything that's about the input-- so let's
+[01:39:37] say you are on a general Q&A use case.
+[01:39:40] You have an input prompt.
+[01:39:42] You do not try to guess the next token there
+[01:39:46] because it's a user input.
+[01:39:47] What you want to fit a next-token prediction on
+[01:39:51] is the answer that you want your LLM to have,
+[01:39:54] which is why the loss is more localized.
+[01:39:59] And then the last stage, RL-- so these days,
+[01:40:02] RL is heavily used to develop reasoning capabilities.
+[01:40:07] And the GLM-5 paper divides this into three parts.
+[01:40:11] So the first one is on reasoning RL, it calls.
+[01:40:15] So for example, you have these math competitions
+[01:40:18] and other similar kinds of data where you have a place
+[01:40:24] to think about what the answer is
+[01:40:26] and an answer that is verifiable.
+[01:40:29] So this is the kind of data that reasoning RL is.
+[01:40:33] Agentic RL-- you put your LLM into a harness,
+[01:40:38] where it can use things like running tests
+[01:40:40] to verify that what it does is correct-- for example,
+[01:40:45] bug fixes.
+[01:40:46] You might want to fix a failing test to a passing test,
+[01:40:50] and so on.
+[01:40:52] And then general RL is a bit more open-ended.
+[01:40:56] So it comes up with dimensions like foundational correctness,
+[01:41:00] emotional intelligence, and task-specific quality,
+[01:41:03] which respectively denote the quality of instruction
+[01:41:07] following.
+[01:41:08] Emotional intelligence is the expert data curator's opinion
+[01:41:13] about what a helpful answer is, and so on, so they
+[01:41:17] can inject that opinion there.
+[01:41:21] And in this time-- so we'll see more about it next time.
+[01:41:26] So we generate the answer.
+[01:41:28] And then, based on whether the answer corresponds
+[01:41:32] to what we're looking for, we might
+[01:41:33] want to upweight the probability of some tokens happening
+[01:41:37] versus not.
+[01:41:41] And I want to connect to the last topic
+[01:41:45] that Afshine mentioned.
+[01:41:46] So we have seen many stages that try to do many things.
+[01:41:51] And one thing you might wonder about
+[01:41:54] is, are we sure that everything that we have learned
+[01:41:59] is preserved?
+[01:42:00] And it's a valid concern.
+[01:42:02] It sometimes isn't, which is why, at the last stage of RL,
+[01:42:09] there is this stage of on-policy cross-stage distillation,
+[01:42:14] where the process that Afshine mentioned is done against
+[01:42:16] teachers that are at previous checkpoints--
+[01:42:20] so more specifically, the one after SFT,
+[01:42:23] and the one after the first RL stage.
+[01:42:28] So it's to make sure that we haven't lost any capabilities.
+[01:42:36] And so these open-weight models, they're great.
+[01:42:41] They give technical papers with many details.
+[01:42:44] And some of the secret sauce behind the data
+[01:42:48] isn't always spelled out.
+[01:42:50] And I just want to say that--
+[01:42:52] keep a critical eye on everything you see,
+[01:42:54] because you see oftentimes, popping up
+[01:42:56] in the news, some providers that complain about others distilling
+[01:43:03] their data.
+[01:43:03] So this might be also part of the data mixture,
+[01:43:06] but of course not written in the technical report.
+[01:43:09] So there are some allegations of it.
+[01:43:13] And also, I want to mention the case of Pi, the coding agent
+[01:43:19] that you might know already.
+[01:43:21] So this is a minimal agent that boasts great performance
+[01:43:26] with minimal harness.
+[01:43:28] And the author, who I believe was a precursor
+[01:43:32] into understanding really well how these models can perform
+[01:43:36] great, he understood that all these RL
+[01:43:41] stages, they focus on developing reasoning capabilities, which
+[01:43:45] enable you to avoid putting in too much context
+[01:43:49] into your harness.
+[01:43:51] So this is one great consequence.
+[01:43:54] And you might see the decrease of the need of harness
+[01:43:58] engineering more and more thanks to that.
+[01:44:02] And sharing things recently in the news--
+[01:44:05] so all this reasoning data and training
+[01:44:09] enables advances, such as in the field of math.
+[01:44:14] So very recently, OpenAI released some solutions
+[01:44:18] to open problems, which is great.
+[01:44:22] And with that, I hope you have a great weekend.
+[01:44:24] [APPLAUSE]

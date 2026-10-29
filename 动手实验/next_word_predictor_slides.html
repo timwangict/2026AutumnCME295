@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>next_word_predictor.py · 执行结果</title>
+<style>
+  :root {
+    --bg: #f4f5f8;
+    --card: #ffffff;
+    --ink: #1a1d23;
+    --muted: #6b7280;
+    --faint: #9aa1ad;
+    --line: #e5e7eb;
+    --blue: #2563eb;
+    --blue-soft: #eaf1fe;
+    --purple: #6d5bd0;
+    --purple-soft: #f1effe;
+    --green: #0f9d58;
+    --green-soft: #e6f6ee;
+    --amber: #d97706;
+    --amber-soft: #fdf3e3;
+    --mono: "SF Mono", "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 顶栏 */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 28px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    z-index: 10;
+  }
+  header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--purple); }
+  header .title { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; }
+  header .subtitle { font-size: 13px; color: var(--muted); }
+  header .spacer { flex: 1; }
+  header .file {
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    background: var(--bg); padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--line);
+  }
+
+  /* 舞台 */
+  .stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+  .slide {
+    position: absolute;
+    inset: 24px;
+    max-width: 980px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    justify-content: safe center;
+    gap: 20px;
+    overflow-y: auto;
+    padding-right: 8px;
+    opacity: 0;
+    transform: translateY(18px);
+    pointer-events: none;
+    transition: opacity .4s ease, transform .4s ease;
+  }
+  .slide.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  .kicker { display: flex; align-items: center; gap: 10px; }
+  .badge {
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.5px;
+    color: var(--purple); background: var(--purple-soft);
+    padding: 4px 12px; border-radius: 999px; border: 1px solid #ddd8f7;
+  }
+  .badge.blue { color: var(--blue); background: var(--blue-soft); border-color: #cddffd; }
+  .badge.green { color: var(--green); background: var(--green-soft); border-color: #c2e9d3; }
+
+  h1 { font-size: 34px; font-weight: 700; line-height: 1.15; letter-spacing: -0.4px; }
+  h1 .en { color: var(--muted); font-weight: 500; }
+  .lead { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 760px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .card h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 14px; text-transform: uppercase; letter-spacing: .6px; }
+
+  /* 公式 */
+  .formula {
+    font-family: var(--mono); font-size: 15px;
+    background: #0f172a; color: #e2e8f0;
+    padding: 14px 18px; border-radius: 10px; line-height: 1.6;
+    display: inline-block;
+  }
+  .formula b { color: #7dd3fc; font-weight: 600; }
+  .formula .dim { color: #94a3b8; }
+
+  /* 表格 */
+  table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: center; border-bottom: 1px solid var(--line); }
+  th { color: var(--faint); font-weight: 500; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+  td.rowlabel { color: var(--muted); font-weight: 600; text-align: left; font-family: var(--sans); }
+  tr.hl td { background: var(--purple-soft); }
+  tr.hl td.rowlabel { color: var(--purple); }
+
+  /* 向量展示 */
+  .vec { display: flex; gap: 8px; flex-wrap: wrap; }
+  .vec .cell {
+    font-family: var(--mono); font-size: 14px;
+    min-width: 46px; padding: 10px 0; text-align: center;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .vec .cell.on { background: var(--purple); color: #fff; border-color: var(--purple); font-weight: 700; }
+  .vec .cell.off { background: #eef0f3; color: var(--faint); }
+
+  /* 概率条 */
+  .bars { display: flex; flex-direction: column; gap: 10px; }
+  .bar { display: flex; align-items: center; gap: 12px; }
+  .bar .label { width: 64px; text-align: right; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .bar .track { flex: 1; height: 22px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--blue); border-radius: 6px; width: 0; transition: width .6s ease; }
+  .bar .val { width: 52px; font-family: var(--mono); font-size: 13px; }
+  .bar.top .label { color: var(--purple); font-weight: 700; }
+  .bar.top .fill { background: var(--purple); }
+  .bar.top .val { color: var(--purple); font-weight: 700; }
+
+  /* 数据流 */
+  .flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .stepbox {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; text-align: center; min-width: 88px;
+  }
+  .stepbox .k { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+  .stepbox .v { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .stepbox.hl { background: var(--purple-soft); border-color: #ddd8f7; }
+  .stepbox.hl .v { color: var(--purple); }
+  .flow .arrow { color: var(--faint); font-size: 18px; }
+
+  .takeaway {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--amber-soft); border: 1px solid #f3e3c2; border-radius: 12px;
+    padding: 14px 16px; font-size: 14px; line-height: 1.6;
+  }
+  .takeaway .ico { font-weight: 700; color: var(--amber); }
+
+  /* 逐项计算展开 */
+  .calc { margin-top: 18px; border-top: 1px dashed var(--line); padding-top: 16px; }
+  .calc-title { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
+  .calc-title b { font-family: var(--mono); color: var(--ink); }
+  .calc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px; margin-bottom: 8px; }
+  .calc-row .target { color: var(--ink); font-weight: 700; margin-right: 6px; }
+  .calc-term { padding: 2px 7px; border-radius: 5px; }
+  .calc-term.keep { background: var(--purple-soft); color: var(--purple); font-weight: 700; border: 1px solid #ddd8f7; }
+  .calc-term.zero { color: var(--faint); }
+  .calc-op { color: var(--faint); }
+  .calc-eq { color: var(--muted); margin: 0 4px; }
+  .calc-result { background: var(--purple); color: #fff; font-weight: 700; padding: 2px 10px; border-radius: 6px; }
+  .calc-note { margin-top: 10px; font-size: 13px; line-height: 1.7; color: var(--muted); background: var(--purple-soft); border: 1px solid #ddd8f7; border-radius: 10px; padding: 10px 14px; }
+  .calc-note b { color: var(--purple); }
+
+  /* slide 内容超高时可滚动 */
+  .slide::-webkit-scrollbar { width: 8px; }
+  .slide::-webkit-scrollbar-track { background: transparent; }
+  .slide::-webkit-scrollbar-thumb { background: #d3d7de; border-radius: 4px; }
+  .slide::-webkit-scrollbar-thumb:hover { background: #b8bec7; }
+
+  /* W2 表格里高亮整列（cute 那一列） */
+  td.hlcol { background: var(--purple-soft); color: var(--purple); font-weight: 700; }
+
+  .points { display: flex; flex-direction: column; gap: 10px; }
+  .point { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.6; }
+  .point .n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--purple-soft); color: var(--purple); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+
+  /* 底栏 */
+  footer {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    padding: 14px 24px; background: var(--card); border-top: 1px solid var(--line); z-index: 10;
+  }
+  .navbtn {
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; transition: all .15s;
+  }
+  .navbtn:hover { border-color: var(--purple); color: var(--purple); }
+  .navbtn:disabled { opacity: .35; cursor: default; }
+  .dots { display: flex; gap: 8px; }
+  .dots .d { width: 8px; height: 8px; border-radius: 50%; background: #d3d7de; cursor: pointer; transition: all .2s; }
+  .dots .d.on { background: var(--purple); width: 22px; border-radius: 999px; }
+  .hint { font-size: 12px; color: var(--faint); }
+  .pageno { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot"></span>
+  <span class="title">next_word_predictor.py</span>
+  <span class="subtitle">一个词怎么一步步变成「下一个词」的预测</span>
+  <span class="spacer"></span>
+  <span class="file">vocab = 6 词 · hidden = 2 · seed = 1</span>
+</header>
+
+<div class="stage">
+
+  <!-- ============ STEP 1 ============ -->
+  <section class="slide active" data-kicker="STEP 1">
+    <div class="kicker"><span class="badge">STEP 1</span><span class="badge blue">one-hot</span></div>
+    <h1>One-hot 编码 <span class="en">· 把词变成网络能读的向量</span></h1>
+    <p class="lead">网络读不了字符串 <code>"cute"</code>。于是给词表里 6 个词各分一个槽位（0–5），用一个向量表示一个词：只有自己那一位是 1，其余全是 0。</p>
+    <div class="card">
+      <h2>词表 vocab → 「cute」的 one-hot</h2>
+      <div class="vec" style="margin-bottom:18px;">
+        <span class="cell">cute</span><span class="cell">fluffy</span><span class="cell">teddy</span><span class="cell">bear</span><span class="cell">runs</span><span class="cell">fast</span>
+      </div>
+      <div class="vec">
+        <span class="cell on">1</span><span class="cell off">0</span><span class="cell off">0</span><span class="cell off">0</span><span class="cell off">0</span><span class="cell off">0</span>
+      </div>
+    </div>
+    <div class="takeaway"><span class="ico">!</span><div>这个向量只说「<b>是谁</b>」，别的什么都没有——任意两个不同的 one-hot 向量都一样「不相似」，没有语义可言。要让它有含义，看下一步。</div></div>
+  </section>
+
+  <!-- ============ STEP 2 ============ -->
+  <section class="slide" data-kicker="STEP 2">
+    <div class="kicker"><span class="badge">STEP 2</span><span class="badge blue">embedding</span></div>
+    <h1>嵌入 <span class="en">= one-hot × W1</span></h1>
+    <p class="lead">W1 是一张 6×2 的权重表（训练中学会）。因为输入是 one-hot，乘法「选中」了 W1 的某一行——那一行，就是这个词的嵌入。</p>
+    <div class="card">
+      <h2>W1 嵌入表（6 × 2）· cute 选中第 0 行</h2>
+      <table>
+        <tr><th>词</th><th>dim 1</th><th>dim 2</th></tr>
+        <tr class="hl"><td class="rowlabel">cute</td><td>0.512</td><td>0.950</td></tr>
+        <tr><td class="rowlabel">fluffy</td><td>0.144</td><td>0.949</td></tr>
+        <tr><td class="rowlabel">teddy</td><td>0.312</td><td>0.423</td></tr>
+        <tr><td class="rowlabel">bear</td><td>0.828</td><td>0.409</td></tr>
+        <tr><td class="rowlabel">runs</td><td>0.550</td><td>0.028</td></tr>
+        <tr><td class="rowlabel">fast</td><td>0.754</td><td>0.538</td></tr>
+      </table>
+      <div style="margin-top:16px; text-align:center;">
+        <span class="formula">embedding = x @ W1&nbsp;&nbsp;<span class="dim">(1×6) @ (6×2) → (1×2)</span></span>
+      </div>
+
+      <div class="calc">
+        <div class="calc-title">逐项展开：one-hot(cute) = <b>[1, 0, 0, 0, 0, 0]</b>，与 W1 每一列做点积（逐项相乘再相加）</div>
+        <div class="calc-row">
+          <span class="target">dim1</span>
+          <span class="calc-term keep">1×0.512</span><span class="calc-op">+</span><span class="calc-term zero">0×0.144</span><span class="calc-op">+</span><span class="calc-term zero">0×0.312</span><span class="calc-op">+</span><span class="calc-term zero">0×0.828</span><span class="calc-op">+</span><span class="calc-term zero">0×0.550</span><span class="calc-op">+</span><span class="calc-term zero">0×0.754</span>
+          <span class="calc-eq">=</span><span class="calc-result">0.512</span>
+        </div>
+        <div class="calc-row">
+          <span class="target">dim2</span>
+          <span class="calc-term keep">1×0.950</span><span class="calc-op">+</span><span class="calc-term zero">0×0.949</span><span class="calc-op">+</span><span class="calc-term zero">0×0.423</span><span class="calc-op">+</span><span class="calc-term zero">0×0.409</span><span class="calc-op">+</span><span class="calc-term zero">0×0.028</span><span class="calc-op">+</span><span class="calc-term zero">0×0.538</span>
+          <span class="calc-eq">=</span><span class="calc-result">0.950</span>
+        </div>
+        <div class="calc-note"><b>0 × 任何数 = 0</b>，5 个「0×」项全部清零 → 只剩 cute 那一行被「1×」保留 → 结果不是算出来的，而是<b>直接取出 W1 的第 0 行</b> [0.512, 0.950]。这就是「查表」：one-hot 里那个 1 的位置，决定取哪一行。</div>
+      </div>
+    </div>
+    <div class="takeaway"><span class="ico">!</span><div>「cute」→ <b>[0.512, 0.950]</b>。为什么是 2 个数而不是 6 个？因为稠密向量能把相近的词放得近（cute 靠近 fluffy），one-hot 永远做不到。</div></div>
+  </section>
+
+  <!-- ============ STEP 3 ============ -->
+  <section class="slide" data-kicker="STEP 3">
+    <div class="kicker"><span class="badge">STEP 3</span><span class="badge blue">scores</span></div>
+    <h1>打分 <span class="en">= 嵌入 × W2</span></h1>
+    <p class="lead">W2（2×6）把这 2 维嵌入映射回 6 个词，每个词一个「原始分数」（logit）——它还不是概率，可正可负、可大可小。</p>
+    <div class="card">
+      <h2>raw scores（还没归一化）</h2>
+      <div style="margin-bottom:14px; text-align:center;">
+        <span class="formula">scores = embedding @ W2&nbsp;&nbsp;<span class="dim">(1×2) @ (2×6) → (1×6)</span></span>
+      </div>
+      <div class="vec">
+        <span class="cell">cute<b>0.362</b></span><span class="cell">fluffy<b>0.653</b></span><span class="cell">teddy<b>0.868</b></span><span class="cell">bear<b>0.499</b></span><span class="cell">runs<b>0.530</b></span><span class="cell on">fast<b>1.138</b></span>
+      </div>
+
+      <div class="calc">
+        <div class="calc-title">逐项展开：<b>score(cute)</b> = embedding <b>[0.512, 0.950]</b> 点积 W2 第 0 列 <b>[0.330, 0.203]</b></div>
+
+        <table style="margin-bottom:14px;">
+          <tr><th style="text-align:left;">W2</th><th>cute</th><th>fluffy</th><th>teddy</th><th>bear</th><th>runs</th><th>fast</th></tr>
+          <tr><td class="rowlabel">dim 1</td><td class="hlcol">0.330</td><td>0.788</td><td>0.303</td><td>0.453</td><td>0.134</td><td>0.403</td></tr>
+          <tr><td class="rowlabel">dim 2</td><td class="hlcol">0.203</td><td>0.262</td><td>0.750</td><td>0.280</td><td>0.485</td><td>0.981</td></tr>
+        </table>
+
+        <div class="calc-row">
+          <span class="target">dim1</span>
+          <span class="calc-term keep">0.512 × 0.330</span><span class="calc-op">=</span><span class="calc-term">0.169</span>
+        </div>
+        <div class="calc-row">
+          <span class="target">dim2</span>
+          <span class="calc-term keep">0.950 × 0.203</span><span class="calc-op">=</span><span class="calc-term">0.193</span>
+        </div>
+        <div class="calc-row">
+          <span class="target">求和</span>
+          <span class="calc-term">0.169</span><span class="calc-op">+</span><span class="calc-term">0.193</span>
+          <span class="calc-eq">=</span><span class="calc-result">0.362</span>
+        </div>
+
+        <div class="calc-note"><b>这次不是「查表」，是真正的点积</b>：embedding 的两个数 [0.512, 0.950] 都非零，所以要逐项相乘再相加；而 step 2 里 one-hot 只有一个 1，才退化成「查表」。W2 里的 0.330、0.203 和 W1 一样，都是 <b>seed=1 抽出的随机数</b>，属于「未训练」的初始权重。</div>
+      </div>
+    </div>
+    <div class="takeaway"><span class="ico">!</span><div>此刻 <b>fast</b> 分数最高（1.138），但这是未经处理的原始值。要把它变成「该选谁」的概率，需要最后一步 softmax。</div></div>
+  </section>
+
+  <!-- ============ STEP 4 ============ -->
+  <section class="slide" data-kicker="STEP 4">
+    <div class="kicker"><span class="badge">STEP 4</span><span class="badge green">softmax</span></div>
+    <h1>Softmax <span class="en">→ 预测下一个词</span></h1>
+    <p class="lead">Softmax 把原始分数压成概率：每个值都为正、加起来正好等于 1，分数越大占比越大。取概率最大的词，就是预测。</p>
+    <div class="card">
+      <h2>每个词作为「下一个词」的概率</h2>
+      <div class="bars">
+        <div class="bar"><span class="label">cute</span><div class="track"><div class="fill" data-w="46"></div></div><span class="val">0.118</span></div>
+        <div class="bar"><span class="label">fluffy</span><div class="track"><div class="fill" data-w="61"></div></div><span class="val">0.157</span></div>
+        <div class="bar"><span class="label">teddy</span><div class="track"><div class="fill" data-w="76"></div></div><span class="val">0.195</span></div>
+        <div class="bar"><span class="label">bear</span><div class="track"><div class="fill" data-w="53"></div></div><span class="val">0.135</span></div>
+        <div class="bar"><span class="label">runs</span><div class="track"><div class="fill" data-w="54"></div></div><span class="val">0.139</span></div>
+        <div class="bar top"><span class="label">fast</span><div class="track"><div class="fill" data-w="100"></div></div><span class="val">0.256</span></div>
+      </div>
+      <div style="margin-top:18px; text-align:center; font-size:16px;">
+        「cute」 → 预测下一个词：<b style="color:var(--purple); font-family:var(--mono);">'fast'</b>（25.6%）
+      </div>
+    </div>
+    <div class="takeaway"><span class="ico">!</span><div>现在预测是瞎猜（cute → fast），因为 W1/W2 还是<b>随机权重</b>。<b>训练 = 反复微调 W1、W2</b>，直到「cute」稳定地指向合理的下一个词——这就是 Word2Vec 和一切 LLM 预训练的原型。</div></div>
+  </section>
+
+  <!-- ============ WHOLE PICTURE ============ -->
+  <section class="slide" data-kicker="SUMMARY">
+    <div class="kicker"><span class="badge green">全 貌</span></div>
+    <h1>一个词，怎么变成一次预测</h1>
+    <p class="lead">把四步串起来，就是「cute」从字符串走到「fast」的完整链路——而 Transformer 正是从这个骨架长出来的。</p>
+    <div class="card">
+      <h2>完整数据流</h2>
+      <div class="flow">
+        <div class="stepbox"><div class="k">输入</div><div class="v">"cute"</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox"><div class="k">one-hot</div><div class="v">[1,0,0,0,0,0]</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox"><div class="k">× W1</div><div class="v">嵌入</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox"><div class="k">embedding</div><div class="v">[0.51, 0.95]</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox"><div class="k">× W2</div><div class="v">6 个分数</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox"><div class="k">softmax</div><div class="v">概率</div></div>
+        <span class="arrow">→</span>
+        <div class="stepbox hl"><div class="k">argmax</div><div class="v">'fast'</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Transformer 怎么从这个骨架长大</h2>
+      <div class="points">
+        <div class="point"><span class="n">1</span><div><b>嵌入保留</b>，但通过注意力变得「随上下文而变」——「bank」挨着 river 和挨着 money 时向量不同。</div></div>
+        <div class="point"><span class="n">2</span><div>不再是单层，而是<b>把很多这样的层堆叠起来</b>。</div></div>
+        <div class="point"><span class="n">3</span><div>最后的 <b>softmax-对词表</b> 完全一样——那正是现代 LLM 挑「下一个 token」的方式。</div></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <button class="navbtn" id="prev" aria-label="上一页">‹</button>
+  <div class="dots" id="dots"></div>
+  <button class="navbtn" id="next" aria-label="下一页">›</button>
+  <span class="pageno" id="pageno"></span>
+  <span class="hint">← → 方向键翻页</span>
+</footer>
+
+<script>
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var dotsBox = document.getElementById('dots');
+  var pageno = document.getElementById('pageno');
+  var cur = 0;
+
+  slides.forEach(function(_, i) {
+    var d = document.createElement('span');
+    d.className = 'd' + (i === 0 ? ' on' : '');
+    d.addEventListener('click', function() { go(i); });
+    dotsBox.appendChild(d);
+  });
+  var dots = Array.prototype.slice.call(dotsBox.children);
+
+  function go(n) {
+    cur = (n + slides.length) % slides.length;
+    slides.forEach(function(s, i) { s.classList.toggle('active', i === cur); });
+    dots.forEach(function(d, i) { d.classList.toggle('on', i === cur); });
+    pageno.textContent = (cur + 1) + ' / ' + slides.length;
+    document.getElementById('prev').disabled = (cur === 0);
+    document.getElementById('next').disabled = (cur === slides.length - 1);
+    // 触发概率条动画
+    slides[cur].querySelectorAll('.fill').forEach(function(f) {
+      f.style.width = f.getAttribute('data-w') + '%';
+    });
+  }
+
+  document.getElementById('prev').addEventListener('click', function() { go(cur - 1); });
+  document.getElementById('next').addEventListener('click', function() { go(cur + 1); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowRight') go(cur + 1);
+    if (e.key === 'ArrowLeft') go(cur - 1);
+  });
+  go(0);
+</script>
+</body>
+</html>
