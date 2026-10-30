@@ -1,0 +1,1725 @@
+[00:00:05] Hello, everyone, and welcome to lecture 4 of CME 285.
+[00:00:12] So today is a very special day because we'll
+[00:00:15] be talking about reinforcement learning-based training
+[00:00:18] methods that are actually getting quite popular,
+[00:00:22] especially when it comes to post-training LLMs.
+[00:00:26] And the reason why today's session is a little bit special
+[00:00:30] is because contrary to the previous ones,
+[00:00:34] there is going to be a little bit of math involved,
+[00:00:37] which is why last time we said all the RL-based methods we will
+[00:00:42] just reserve them for today.
+[00:00:44] So today is the day.
+[00:00:46] And yeah, so I wanted to start with this disclaimer.
+[00:00:49] And the second thing I wanted to say
+[00:00:52] is we will try to start from intuition first and then stay
+[00:00:58] rigorous on the math.
+[00:00:59] But please don't be intimidated by the big formulas.
+[00:01:03] Yeah, hope it's going to be a good one.
+[00:01:06] With that, we're going to start as usual by recapping
+[00:01:10] what we saw last time.
+[00:01:13] So if you remember, last time we were
+[00:01:15] talking about training LLMs.
+[00:01:18] And the first step of training LLMs is called pretraining.
+[00:01:24] It is a step that is meant to teach the model how
+[00:01:28] to understand texts, how to understand codes.
+[00:01:32] And this step typically involves training your model
+[00:01:36] on a lot of data.
+[00:01:37] By a lot of data, I mean trillions of tokens.
+[00:01:42] So there's a lot of work around finding the right mixtures, how
+[00:01:47] much web should it be in there, how the books should
+[00:01:50] be in there, and so on.
+[00:01:52] And the loss function for this one
+[00:01:54] is the cross-entropy loss, which tries
+[00:01:58] to penalize any deviation from the token
+[00:02:02] that the model needs to predict, so its next token prediction.
+[00:02:06] And we saw some emerging stages, such as mid training which
+[00:02:12] involves higher quality data and also long context training,
+[00:02:17] which involves training your model on longer contexts data
+[00:02:21] as well.
+[00:02:22] So that's the first step.
+[00:02:24] The second step that we saw was called Supervised Fine Tuning,
+[00:02:28] a.k.a.
+[00:02:29] SFT.
+[00:02:31] And in this step, we're trying to take our model that
+[00:02:35] understands text, that understands code, and tune it
+[00:02:39] to be useful.
+[00:02:41] So what do I mean by useful?
+[00:02:43] For instance, if you want to have an assistant,
+[00:02:45] you would want your model to give answers to questions.
+[00:02:50] And that is one of the examples where people would use SFT for.
+[00:02:56] So in terms of the loss function,
+[00:02:58] we still have the cross entropy.
+[00:03:01] Except here we're only trying to penalize deviations
+[00:03:05] for token predictions that are on the output side.
+[00:03:09] So it's next token prediction but for outputs.
+[00:03:13] At the end of this stage, our model understand text.
+[00:03:18] Our model is useful.
+[00:03:19] But here we may want to inject human preferences.
+[00:03:24] And we saw this third step called preference tuning.
+[00:03:28] And this is the step that involves RL-based methods
+[00:03:33] that we're going to see today.
+[00:03:35] We did not see any specifics about the exact loss formula.
+[00:03:41] So we're going to see today.
+[00:03:44] And the other piece that we saw was the fact
+[00:03:48] of increasing the model's reasoning capabilities, so
+[00:03:53] reasoning, which also happens to be performed
+[00:03:57] with this RL-based techniques.
+[00:03:59] And we're also going to see that today.
+[00:04:03] And this is where we left off last time.
+[00:04:06] And today, we're going to focus on these last two stages,
+[00:04:11] and in particular, emphasize how we come up with the loss, which
+[00:04:17] right now, we don't know what the loss is
+[00:04:20] and see how we can use that.
+[00:04:23] Cool.
+[00:04:25] I want to, again, have a big disclaimer here
+[00:04:29] that these methods, they are typically mathematically
+[00:04:32] involved, not just for this lecture,
+[00:04:34] but if you were to read papers on that topic.
+[00:04:39] And so if you feel like it's too much,
+[00:04:44] here is the proposed steps for remediation.
+[00:04:47] So first one, focus on the intuition on why
+[00:04:51] a certain thing is needed.
+[00:04:53] Second one is if there are formulas or symbols
+[00:04:56] that you are not familiar with, just make sure to review them.
+[00:05:01] And then the third one is just to interpret the formulas
+[00:05:04] from first principles.
+[00:05:06] And I actually have a second disclaimer,
+[00:05:09] which is that on top of all of that, papers,
+[00:05:14] they tend to choose conventions that are different from one
+[00:05:18] paper to another.
+[00:05:19] So that may add to the confusion.
+[00:05:22] So we will see that, for instance, we're
+[00:05:24] going to talk about rewards.
+[00:05:27] Rewards are usually denoted r.
+[00:05:29] But sometimes in papers, r could also
+[00:05:32] mean a ratio, a ratio of probabilities.
+[00:05:36] So here, to make sure we distinguish them properly,
+[00:05:40] we will note them rho in this class.
+[00:05:43] Second one is the policy, and we will see what a policy is.
+[00:05:49] There are several kinds of policy.
+[00:05:52] Is it the old policies, the reference policy?
+[00:05:55] And sometimes these notations are also mixed.
+[00:05:59] And then the third one to call out
+[00:06:01] is that so far, we've been focusing
+[00:06:05] on minimizing a loss function.
+[00:06:07] And we noted the loss function L. Well, here
+[00:06:13] most of the time we will want to maximize quantities.
+[00:06:17] But the problem is sometimes these quantities
+[00:06:19] are also noted L which usually you think of as being a loss.
+[00:06:24] But just make sure that you know what you want to do.
+[00:06:27] Do you want to minimize?
+[00:06:28] You want to maximize?
+[00:06:30] So that's also another thing to keep in mind.
+[00:06:34] Cool.
+[00:06:35] Well, with all of that said, let's start.
+[00:06:39] And I wanted to first start with a refresher on what
+[00:06:43] reinforcement learning is.
+[00:06:45] So I'm not sure if any of you has ever taken a reinforcement
+[00:06:48] learning-based class.
+[00:06:50] But at a very high level, the way it works
+[00:06:53] is you have an agent that is interacting
+[00:06:57] with an environment that is in a given state
+[00:07:01] and that wonders what action to take to go to another state.
+[00:07:07] So the way it tries to decide on which action to take
+[00:07:13] is something that is leveraging a policy.
+[00:07:18] So pi theta is typically how it's denoted.
+[00:07:23] And after the agent performs an action, it receives a reward.
+[00:07:30] And the goal of RL-based problems
+[00:07:33] is to maximize the sum of rewards
+[00:07:36] that your agent is collecting.
+[00:07:39] Now you may be wondering, well, how
+[00:07:42] does that have to do with LLMs?
+[00:07:45] So here, we're going to see a little bit how
+[00:07:47] things map to the LLM world.
+[00:07:50] So the agent here is the LLM that takes some input as a state
+[00:08:00] and tries to decide what to do next,
+[00:08:02] so what token to sample next.
+[00:08:05] So the action is a token.
+[00:08:08] And in order to decide what token to go next to,
+[00:08:13] what it does is it relies on the probability distribution
+[00:08:18] that it outputs, given an input.
+[00:08:20] And so here that one will be noted pi theta.
+[00:08:24] So back to the notation last time,
+[00:08:26] so this is where the pi is coming from, pi as in policy.
+[00:08:31] And it collects rewards.
+[00:08:34] So one note here is that it can be challenging to define
+[00:08:40] token-level rewards.
+[00:08:43] So a lot of the time, we will also encounter this setup
+[00:08:48] not at the token level, but at the response level
+[00:08:52] or at the completion level.
+[00:08:55] And so here you can also consider
+[00:08:57] an input as being your prompt, an action
+[00:09:01] as being your response, and pi theta
+[00:09:06] as being just the probability of you outputting a response,
+[00:09:10] given your prompt.
+[00:09:12] And then as a result of that, you will get a reward.
+[00:09:17] So we're going to spend a few minutes on the reward part.
+[00:09:21] And I know we spent maybe 10 minutes
+[00:09:26] last time talking about this in different settings.
+[00:09:29] So here I just want to summarize what we saw.
+[00:09:33] So in order for you to quantify how good a response is,
+[00:09:39] you actually have typically two different categories
+[00:09:44] of situations you can be in.
+[00:09:47] The first one, the first category
+[00:09:48] is where there is no absolute ground
+[00:09:52] truth to the answer, where actually judging your answer
+[00:09:55] is a little bit more subjective.
+[00:09:58] And this is where we saw in the preference tuning case
+[00:10:03] where we could have human preferences that
+[00:10:08] try to up rank, let's say, responses that have, let's say,
+[00:10:13] a better tone compared to ones that have a worse tone.
+[00:10:19] And this is something that you would typically model.
+[00:10:23] You would model with a reward model that
+[00:10:27] leverages what we saw last time, the Bradley-Terry formulation,
+[00:10:33] which is a way to express your loss in a pairwise fashion
+[00:10:38] and train a reward model.
+[00:10:42] So here the first category is you don't have a ground truth.
+[00:10:46] And you try to come up with a way
+[00:10:48] to quantify how good responses are, for instance,
+[00:10:50] with human preferences.
+[00:10:53] And you would use the Bradley-Terry formulation,
+[00:10:56] and these methods would be called RLHF,
+[00:11:02] because you would use human feedback as a way to quantify
+[00:11:06] how good the responses are.
+[00:11:10] And then the second big category of situations you can be into
+[00:11:15] is where you can actually verifiably tell
+[00:11:21] if your answer is correct or not.
+[00:11:24] And so here are some examples of situations
+[00:11:27] could be if you want to solve a math problem,
+[00:11:30] you know what the solution is.
+[00:11:31] Or if you want to write a piece of software,
+[00:11:35] you know if your solution is correct
+[00:11:37] or not if, let's say, it passes the test cases.
+[00:11:42] So you have a deterministic way to check whether your answer is
+[00:11:48] correct or not.
+[00:11:49] And so these methods you will also find them
+[00:11:53] under the name RLVR, Reinforcement Learning
+[00:11:57] with Verifiable Rewards.
+[00:12:00] And these are typically in the field
+[00:12:03] of reasoning, so math problems and coding problems.
+[00:12:09] So this is how you can have your rewards.
+[00:12:13] And so it would be more at the completion level,
+[00:12:15] not at the token level, at the completion level.
+[00:12:20] So given this definition of reward,
+[00:12:24] you may want to tweak the parameters of your model
+[00:12:29] to maximize the rewards that you're getting.
+[00:12:33] So coming back to the examples that we saw last week
+[00:12:35] in the preference tuning case, what you want
+[00:12:38] is to align your model with human preferences.
+[00:12:42] So you would start with a prompt,
+[00:12:44] and then you would generate a completion with your LLM.
+[00:12:50] And then given the completion that you would generate,
+[00:12:52] you would pass in the prompt and the completion
+[00:12:56] into a reward model that is frozen
+[00:12:59] that tells you whether the answer is good or not
+[00:13:02] with respect to the prompt.
+[00:13:05] And depending on how the reward model responds,
+[00:13:10] you would tweak the parameters of your LLM
+[00:13:13] in order to maximize the rewards, the expected rewards
+[00:13:17] that is generated.
+[00:13:20] So this is the preference tuning case
+[00:13:22] and you have similarly for the reasoning case,
+[00:13:26] when you have a prompt that is maybe more of a reasoning prompt
+[00:13:31] or a coding prompt.
+[00:13:33] And here you have a deterministic way
+[00:13:36] to evaluate the quality of your answer.
+[00:13:39] And so here you would only look at the final answer.
+[00:13:44] And you would use that in order to tweak
+[00:13:48] the parameters of your LLM which is here, your policy.
+[00:13:54] OK.
+[00:13:55] So now we talked about the setting.
+[00:13:58] Now let's go into the math.
+[00:13:59] Yeah?
+[00:14:00] [INAUDIBLE]
+[00:14:01] So the question is, would the probability of a full response
+[00:14:05] be very low?
+[00:14:06] Yes, indeed it would.
+[00:14:08] That is the reason why people use logarithm
+[00:14:10] in order to have some numerical stability.
+[00:14:12] But yeah, great point.
+[00:14:14] Yeah?
+[00:14:15] [INAUDIBLE]
+[00:14:17] So the question is, do you need a human every time
+[00:14:19] you generate a completion?
+[00:14:20] So the answer is no, which is the reason why you're actually
+[00:14:24] training a reward model firsthand.
+[00:14:28] You're training it at human preferences.
+[00:14:31] And the reason why you're doing that is because you don't want
+[00:14:34] to have a human in the loop every time you
+[00:14:36] generate a completion.
+[00:14:37] And what you would do is to use that reward model
+[00:14:41] for any responses that you're generating,
+[00:14:44] and you're using that reward model
+[00:14:45] in order to assess how good the response is.
+[00:14:48] So yeah, you are actually not leveraging humans in this loop.
+[00:14:55] OK.
+[00:14:55] Perfect.
+[00:14:57] So I was saying let's go into the math.
+[00:15:00] So here, our objective function is to maximize the expected
+[00:15:08] rewards that you're getting.
+[00:15:10] So in mathematical terms, what you want to do
+[00:15:14] is to find parameters theta of your model
+[00:15:18] that maximize the objective function, which
+[00:15:22] is the expectation of rewards as you're sampling trajectories
+[00:15:30] from your policy pi theta, which is your model.
+[00:15:36] And so I know what you're thinking.
+[00:15:41] In machine learning, when you want
+[00:15:42] to optimize an objective function,
+[00:15:44] typically what you want to get is the gradient
+[00:15:48] because you want to perform your updates.
+[00:15:50] So the first question that we want to tackle here
+[00:15:53] is how do you get the gradients of this objective?
+[00:15:58] And so I know a lot of us are coming
+[00:16:00] from different backgrounds.
+[00:16:02] And I want to make sure we're speaking the same language.
+[00:16:05] So little refresher on gradients.
+[00:16:10] You can think of gradients as a way for you
+[00:16:14] to get the direction and the magnitude
+[00:16:19] of the steepest increase.
+[00:16:22] So in the 1D case where your function has an input x,
+[00:16:29] that is just one number, you all know the derivative.
+[00:16:35] So if the derivative is positive,
+[00:16:37] what that means is your function increases as x increases.
+[00:16:40] If it's negative, it increases as x decreases.
+[00:16:45] So the generalization of that for the n dimensional case
+[00:16:50] is the gradient.
+[00:16:52] And the gradient of f in this case
+[00:16:56] is the partial derivative of that function with respect
+[00:17:00] to all the dimensions of your input x, which is in Rn.
+[00:17:08] Are we all good on this?
+[00:17:10] OK.
+[00:17:10] So with that being said, let's go back
+[00:17:14] to our original problem, which is we have an objective function
+[00:17:18] to maximize.
+[00:17:20] And what we want to do is to compute the gradient.
+[00:17:23] And so I will just do that.
+[00:17:28] So what we want is for us to maximize the expected rewards.
+[00:17:37] And so in mathematical terms, what that means is
+[00:17:42] we want to maximize the rewards such
+[00:17:52] that the trajectory is sampled from your policy.
+[00:17:55] So this is exactly what is on the slide means.
+[00:18:00] And so if you want to take the gradient of that,
+[00:18:05] well, you would just compute what is in between the integral.
+[00:18:13] So what you would do is just wander for a second
+[00:18:19] what is a function of theta.
+[00:18:21] So is R a function of theta?
+[00:18:23] No, it is frozen.
+[00:18:24] Is pi theta a function of theta?
+[00:18:28] Yes.
+[00:18:29] So what you would do is actually go and put the gradient
+[00:18:33] in there.
+[00:18:35] And of course, you have some regularity
+[00:18:38] that you assume is in place.
+[00:18:44] OK.
+[00:18:44] Mathematical trick.
+[00:18:46] What is the gradient of pi of theta?
+[00:18:49] So you may know that the gradient of log of a function
+[00:18:55] is the gradient of that function over that function.
+[00:19:00] So that's a mathematical result.
+[00:19:03] So what that means is that the gradient of a function
+[00:19:06] is equal to the gradient of the log of that function times
+[00:19:12] that function.
+[00:19:14] So here this is equal to the gradient of the log of pi theta
+[00:19:21] times pi theta.
+[00:19:28] And so what does that mean?
+[00:19:32] I'm going to just rewrite everything
+[00:19:34] so that we're all clear.
+[00:19:38] So it's integral of R tau gradient of log of pi theta pi
+[00:19:51] theta of t and d tau.
+[00:19:56] So this is nothing else.
+[00:20:03] This is nothing else than the expected value of your rewards
+[00:20:12] times the gradient of the logarithm of pi theta,
+[00:20:25] where tau is sampled from your policy of parameters theta.
+[00:20:35] Does everyone agree with the math?
+[00:20:37] Yes?
+[00:20:37] [INAUDIBLE]
+[00:20:39] So the question is, how did you introduce the log?
+[00:20:41] So I just used the fact that the gradient
+[00:20:48] of the log of a function phi of theta
+[00:20:51] is equal to the gradient of that function over that function.
+[00:21:01] So it's just a mathematical identity.
+[00:21:03] [INAUDIBLE]
+[00:21:07] Yes, exactly.
+[00:21:07] So what we did is we just put that here.
+[00:21:11] [INAUDIBLE]
+[00:21:14] Yes, exactly.
+[00:21:15] Thank you.
+[00:21:17] Great.
+[00:21:18] Does everyone agree with the math?
+[00:21:23] OK, cool.
+[00:21:25] So the reason why I'm doing the math on the blackboard
+[00:21:28] is not because I like writing on the blackboard, but I mean,
+[00:21:30] I do.
+[00:21:31] But here you will see this formula quite a lot.
+[00:21:35] And it's just important to know where this comes from.
+[00:21:40] And so what that means is that the gradient
+[00:21:43] of your objective function is incentivizing your model
+[00:21:49] to increase probabilities of actions that
+[00:21:54] have a positive reward and decrease
+[00:21:58] the probability of actions that have a negative reward.
+[00:22:03] Yeah?
+[00:22:04] [INAUDIBLE]
+[00:22:05] So the question is, what does the tilde in the tau tilde
+[00:22:10] pi of theta mean?
+[00:22:11] So that means that you're sampling your trajectory
+[00:22:16] from the probability distribution given
+[00:22:19] by your policy of parameters theta.
+[00:22:21] So tilde means sampled from.
+[00:22:28] So again, I will just repeat the intuition.
+[00:22:32] So what you can take away from this formula
+[00:22:35] is that if the reward is positive,
+[00:22:41] the gradient will incentivize your model
+[00:22:44] to increase the probability of such actions.
+[00:22:49] And it will incentivize your model
+[00:22:52] to decrease the probability of actions
+[00:22:54] that have negative reward.
+[00:22:59] OK.
+[00:23:00] So based on that, there's one little thing
+[00:23:04] that I want to tell you about, which
+[00:23:05] is that we talked in terms of trajectories.
+[00:23:10] And in the LLM case, what we typically do is we first have
+[00:23:15] a set of prompts, the x's.
+[00:23:18] And then we sample the responses from the policy of our model,
+[00:23:26] given these prompts.
+[00:23:30] So the reason why we only did the tau sample from pi theta
+[00:23:35] is just because it didn't want to make it more
+[00:23:39] confusing on the blackboard.
+[00:23:40] But just think of expectations as being over prompts and then
+[00:23:45] over responses, given these prompts.
+[00:23:50] OK.
+[00:23:50] So now you may wonder, well, how can you
+[00:23:55] update the weights of your model given what we saw?
+[00:23:58] So here what we would do is we would have a prompt x,
+[00:24:03] and we would generate a completion
+[00:24:05] y sampled from our LLM, given the input x.
+[00:24:14] What we would do is we would evaluate
+[00:24:16] the reward that is associated with the prompt
+[00:24:20] and the response.
+[00:24:22] And then we would compute the gradient, which we saw
+[00:24:26] is R times the gradient of the log of pi.
+[00:24:31] And so here's exactly what's on the slides.
+[00:24:35] And then you would update your parameters.
+[00:24:38] So you may be familiar with gradient descent.
+[00:24:41] So it's theta minus, but here we want to maximize the objective.
+[00:24:46] We want to maximize our model generating high reward.
+[00:24:51] So here it's actually theta plus alpha times the gradient
+[00:24:56] because it's gradient ascent.
+[00:25:00] So one thing that I want to say is that contrary to pretraining,
+[00:25:08] contrary to SFT, here we need to always generate the response.
+[00:25:14] Because here we're in an on policy setting.
+[00:25:16] We're generating the response and then
+[00:25:19] performing the update on the response generated by the model.
+[00:25:22] This is not a fixed response.
+[00:25:24] It is generated by the model.
+[00:25:26] So the problem with that is you're
+[00:25:28] asking your model to generate responses every time
+[00:25:31] you want to make an update.
+[00:25:34] And that step is very expensive.
+[00:25:38] You cannot parallelize it because you need to ask
+[00:25:40] your model, OK, what is the next token?
+[00:25:42] And then you take that token and you ask, what is the next token?
+[00:25:45] And one at a time you're generating these responses.
+[00:25:50] And so one thing that I want to tell you
+[00:25:53] is a method that people can use in order
+[00:26:00] to limit the number of times they
+[00:26:03] need to generate completions.
+[00:26:09] And I want to write that down.
+[00:26:14] So here what we're saying is that we
+[00:26:17] want to maximize the expected rewards when
+[00:26:21] the trajectory is sampled from the current policy.
+[00:26:26] So we want to maximize this.
+[00:26:32] So we want to maximize the expectation of R of tau
+[00:26:38] when R, sorry, when tau is sampled from the current policy.
+[00:26:48] Which is equal to the integral of R
+[00:26:50] of tau pi theta of tau d tau.
+[00:26:57] But another way of writing this could be to say if we have,
+[00:27:05] let's say, another policy tau fixed,
+[00:27:13] we could express this quantity as a function of tau fixed
+[00:27:20] by letting this be popped up.
+[00:27:23] So here we do pi theta of tau over pi theta fixed of tau times
+[00:27:36] pi theta fixed of tau d tau.
+[00:27:43] Which is equal to the expectation
+[00:27:47] of R of tau times pi theta of tau over pi theta fixed of tau.
+[00:28:07] Where tau is sampled from pi theta fixed.
+[00:28:15] So I want to just highlight.
+[00:28:19] So we went from maximizing the expected value when
+[00:28:24] tau is sampled from pi theta of a quantity
+[00:28:31] over to a quantity which samples the trajectory from a policy
+[00:28:37] of fixed given parameters.
+[00:28:43] So why did I do that?
+[00:28:46] So let's imagine for a second that we're
+[00:28:48] tired of always generating completions every time we
+[00:28:52] want to perform an update.
+[00:28:54] Let's assume we generate completions, let's say once.
+[00:29:00] And then we perform updates using the completions
+[00:29:07] of that one time but by reweighting the rewards
+[00:29:14] for a given trajectory with the ratio
+[00:29:17] of the probability of your current policy
+[00:29:21] over your fixed policy.
+[00:29:26] So the reason why I wrote that is because sometimes we
+[00:29:29] don't want to always do that.
+[00:29:30] We want to have a fixed policy that
+[00:29:33] does that once and then just reweight the terms in a way that
+[00:29:38] makes it still mathematically valid,
+[00:29:41] because this is what we care about.
+[00:29:46] So one thing that I want to add is
+[00:29:49] this term is called importance sampling ratio.
+[00:29:58] Yes?
+[00:29:59] [INAUDIBLE]
+[00:30:00] So the question is I don't get the benefits.
+[00:30:02] We're still computing pi theta of tau.
+[00:30:05] What is the benefit?
+[00:30:06] So the trick is evaluating the policy
+[00:30:12] is different with generating a rollout.
+[00:30:15] Because evaluating the policy, you're
+[00:30:17] taking everything as input in parallel and computing
+[00:30:21] everything, all the probabilities.
+[00:30:23] But here when you do the rollout,
+[00:30:25] as in when you generate a response,
+[00:30:27] you need to take the first token to generate the token.
+[00:30:30] And then take that token and generate the next token
+[00:30:35] over and over.
+[00:30:37] So this is expensive.
+[00:30:39] This is cheap.
+[00:30:42] Yeah?
+[00:30:43] [INAUDIBLE]
+[00:30:44] So the question is, please explain a bit more what
+[00:30:47] you mean by this is cheap.
+[00:30:48] So here you know the full response.
+[00:30:50] You know the full response.
+[00:30:52] So you're putting all the responses inputs,
+[00:30:57] all in parallel.
+[00:30:58] So it's all being computed in a nice parallel fashion.
+[00:31:04] So maybe I can do something else that could be more helpful.
+[00:31:11] You mean that [INAUDIBLE]?
+[00:31:18] Yeah, exactly.
+[00:31:22] So here, so generation, what you're doing is you're putting--
+[00:31:35] so this is your model--
+[00:31:37] putting a token in, token out.
+[00:31:43] That token in, token out, and so on.
+[00:31:53] But for evaluation, what you're doing is
+[00:32:01] you already know the full completion.
+[00:32:03] You already know it.
+[00:32:04] You know all the tokens.
+[00:32:09] So you're putting everything as inputs all at once.
+[00:32:15] And you know that your LLM is a decoder only LLM,
+[00:32:18] so it has the masked self-attention.
+[00:32:21] So it's able to nicely only attend to itself.
+[00:32:23] And the ones before all that is very parallel.
+[00:32:26] And you can get the corresponding probabilities
+[00:32:30] as outputs.
+[00:32:34] This is expensive.
+[00:32:36] This is cheap.
+[00:32:40] OK.
+[00:32:40] Great question.
+[00:32:41] Yeah?
+[00:32:42] [INAUDIBLE]
+[00:32:43] So the question is we're still doing the expensive calculation
+[00:32:46] with theta fixed.
+[00:32:47] Yes, but you can do it once and reuse that several times.
+[00:32:51] You don't need to do that every time.
+[00:32:53] [INAUDIBLE]
+[00:32:54] The question is for multiple training steps.
+[00:32:56] Yes.
+[00:32:57] So we will see that more in detail.
+[00:32:59] I just didn't want this to come out of the blue.
+[00:33:01] This is the reason.
+[00:33:05] So now, what I want to do is to go through some challenges
+[00:33:11] that such a vanilla approach can exhibit.
+[00:33:15] So this is not one challenge.
+[00:33:18] This is just like a small FYI.
+[00:33:23] The first challenge that I want to mention
+[00:33:26] is that if we use a reward function that does not
+[00:33:33] have a concept of relative compared to some baseline,
+[00:33:40] we may get gradients that are of high variance.
+[00:33:45] So I'll give you an example.
+[00:33:47] Let's assume we have a prompt, and we have two answers.
+[00:33:51] Let's say one is good and the other one is bad.
+[00:33:55] In the first case, the good answer has a reward of 101,
+[00:34:00] and the bad answer has a reward of 100.
+[00:34:05] So you know that 101 is greater than 100,
+[00:34:10] but both are very high, and you don't exactly get the difference
+[00:34:14] relative to one another.
+[00:34:17] The problem is that this will lead--
+[00:34:20] this will lead to noisy gradients,
+[00:34:23] because you know that your model will update parameters
+[00:34:29] as a function of R and the gradient
+[00:34:33] of the log of the policy.
+[00:34:36] So if R is always big to make big updates,
+[00:34:42] it will make big updates to get good answers pop up more.
+[00:34:48] It will make big updates to make the bad answer pop up
+[00:34:51] more but in a lower magnitude, because the reward is
+[00:34:55] lower than the one for than for the good one.
+[00:34:59] So at the end of the day, if you do that enough times,
+[00:35:01] you will get the parameters that you want to get,
+[00:35:05] but you will have very high variance gradients.
+[00:35:09] As in you will have big updates for good, then big updates
+[00:35:13] for bad and so on.
+[00:35:17] So what you want is to actually get
+[00:35:20] a sense of what is the expected reward that you should receive
+[00:35:25] for a given state.
+[00:35:28] And then contrast the reward of each action
+[00:35:32] with respect to that.
+[00:35:36] So if you say that OK, on average 100.5 is roughly OK,
+[00:35:43] then if you have plus 0.5, then you know it's good.
+[00:35:49] And if you have minus 0.5, then you know it's not good.
+[00:35:54] And you can show on a toy example
+[00:35:58] that the gradients that you get as a result of that
+[00:36:01] are of much lower variance when you do
+[00:36:05] have that baseline, when you do have that sense of relative
+[00:36:10] to something.
+[00:36:13] So that's the first challenge.
+[00:36:16] The second challenge is that the two types of reward that we saw
+[00:36:22] are at the completion level, meaning
+[00:36:24] that you either know that everything is good
+[00:36:27] or either know that everything is bad.
+[00:36:29] You either know that everything is correct,
+[00:36:31] or you know that everything is not correct.
+[00:36:34] Well, I'll tell you this example.
+[00:36:36] So let's assume your prompt is about Teddy
+[00:36:39] who is in a sealed box.
+[00:36:40] And you want to-- you're actually
+[00:36:42] moving the box to the kitchen.
+[00:36:44] And now you're asking yourself where is Teddy?
+[00:36:47] And let's assume your model says, OK, step 1,
+[00:36:50] Teddy climbs out of the box.
+[00:36:52] Step 2, teddy walks to the kitchen.
+[00:36:54] And step 3, answer-- kitchen.
+[00:36:57] So know that the answer is correct
+[00:36:59] because you move the box to the kitchen.
+[00:37:04] But what is not correct is Teddy who's
+[00:37:07] working because Teddy is in the box the whole time.
+[00:37:12] And in the vanilla case, you would
+[00:37:17] incentivize all tokens of this response
+[00:37:19] to happen more frequently.
+[00:37:22] And this is not what you want to do.
+[00:37:24] So you're lacking an explicit token level credit assignment.
+[00:37:30] That is something that we need to work on.
+[00:37:34] And then the third one I think we briefly
+[00:37:36] mentioned it last time.
+[00:37:40] The policy that you already have at the beginning
+[00:37:42] of this training stage is already at a good state.
+[00:37:46] You already did pretraining.
+[00:37:48] You already did your SFT.
+[00:37:49] Your model is useful, and you don't want your trained model
+[00:37:54] to deviate too much from the model
+[00:37:58] that you trained because it's already good.
+[00:38:02] And on top of that, sometimes the rewards that you have,
+[00:38:06] they're not exactly aligned to your end goal.
+[00:38:10] So I'll give you the following example.
+[00:38:13] So let's assume me I come here, and in order
+[00:38:20] to know if I did a good job at giving this lecture,
+[00:38:24] I would rely on the intensity of the claps
+[00:38:27] that you would make at the end of the lecture.
+[00:38:30] So if I were to only optimize for that,
+[00:38:34] then that would not be ideal, because maybe I would just
+[00:38:37] spend an hour or two hours making jokes that
+[00:38:40] are not related to the class.
+[00:38:42] I would still receive claps, maybe,
+[00:38:44] but it would not be aligned with my objective.
+[00:38:48] And so there is this risk of reward hacking,
+[00:38:52] where your reward model, may actually be imperfect.
+[00:38:57] And you may have your model who's
+[00:38:59] just trying to game the reward model, and you don't want that.
+[00:39:04] So I hope I convinced you that we don't want the policy.
+[00:39:09] We don't want the model to be too far from the model
+[00:39:12] that you already have.
+[00:39:14] So we want to have some sense of constraints in there.
+[00:39:21] And we will see how we can quantify the difference
+[00:39:23] between distribution.
+[00:39:24] Yeah?
+[00:39:25] [INAUDIBLE]
+[00:39:27] So the question is, what do we mean
+[00:39:28] by don't want to regress on previous tasks?
+[00:39:30] So your model was trained for specific things.
+[00:39:33] And you're now asking it to be better at something else.
+[00:39:38] And so the capabilities that it has acquired
+[00:39:42] can be something that it loses if you emphasize too much
+[00:39:47] on the task of interest here.
+[00:39:51] And so you also want your model to not deviate too much
+[00:39:54] because of that.
+[00:40:00] OK.
+[00:40:00] Cool.
+[00:40:01] Summary.
+[00:40:02] What are the three challenges?
+[00:40:03] The first one is gradients can be noisy.
+[00:40:07] Second one is we don't have out-of-the-box an explicit
+[00:40:11] token-level credit assignment.
+[00:40:15] And the third one is we don't have any explicit constraints
+[00:40:20] on how far the policy can go with respect to the policy
+[00:40:24] that we're starting from.
+[00:40:27] So with these three challenges in mind,
+[00:40:30] what we will do is talk about the most common RL algorithms
+[00:40:36] that are out there, which I'm sure you've heard of.
+[00:40:40] We will start with the first one, PPO.
+[00:40:45] So PPO stands for Proximal Policy Optimization.
+[00:40:51] And what it tries to do is it tries
+[00:40:54] to maximize your objective function
+[00:40:58] but with two differences compared to the first one.
+[00:41:03] The first difference is it tries to maximize advantages
+[00:41:07] and not rewards.
+[00:41:10] And the second difference is it tries
+[00:41:12] to not deviate too much from the policy that you had before.
+[00:41:18] And we will see exactly how these two terms are obtained.
+[00:41:22] But just one note.
+[00:41:24] PPO, the P in PPO is for that second term.
+[00:41:28] You want a bit of proximity to that policy of reference.
+[00:41:35] So with that being said, let's go into the first term,
+[00:41:40] which is the advantage term.
+[00:41:43] So the reward function that you have
+[00:41:46] is wondering how good is this answer with respect
+[00:41:50] to the prompt.
+[00:41:51] But what we really want to ask is,
+[00:41:55] compared to what we would expect for this prompt, how good is
+[00:41:59] this response?
+[00:42:02] So we want to have some form of relative to a baseline,
+[00:42:07] and that is what advantages are aiming for.
+[00:42:12] And in order to illustrate that, let's go through an example.
+[00:42:17] So let's assume that we have the following prompts.
+[00:42:20] Teddy is in a box.
+[00:42:21] Where it's Teddy?
+[00:42:23] And then you have your response--
+[00:42:25] in the box.
+[00:42:27] So the reward for that one-- let's
+[00:42:30] assume it's a correct response.
+[00:42:31] So the reward for the whole completion
+[00:42:34] relative to that prompt is, let's say, plus 1.
+[00:42:37] But you want to know how these different tokens are actually
+[00:42:44] receiving the credits relative to what they are expecting.
+[00:42:50] So the question that we want to ask ourselves
+[00:42:55] is, given a partial completion, what
+[00:43:00] is the expected final reward if you
+[00:43:05] were to continue sampling from the policy
+[00:43:07] for the rest of the tokens?
+[00:43:10] So I'll give you an example.
+[00:43:12] So let's assume you have the whole input.
+[00:43:15] And then you're decoding, let's say,
+[00:43:17] in here you want to ask yourself, OK,
+[00:43:21] if I were to continue like this on average, what would
+[00:43:25] be the expected final rewards?
+[00:43:28] And here, let's suppose it's 0.6.
+[00:43:31] Then you decode.
+[00:43:31] You go to the, OK, 0.7 box.
+[00:43:37] It's the correct answer.
+[00:43:38] So it should have a big bump, so let's say 0.95 and 1.
+[00:43:44] So what did we do here, what we tried to do is to ask ourselves,
+[00:43:51] given a partial completion, what the expected final reward would
+[00:43:56] be.
+[00:43:58] And the nice thing with this approach
+[00:44:02] is we have a sense of a baseline.
+[00:44:04] And the baseline here is compared
+[00:44:08] to how we would have completed if you
+[00:44:13] were to sample the policy.
+[00:44:15] And you can exactly pinpoint the contribution of a given token
+[00:44:21] when you do that.
+[00:44:23] So in this example, if you were to compute
+[00:44:27] the very simple version of the advantage for the token box,
+[00:44:34] you would take the value with box
+[00:44:40] and subtract the value without box.
+[00:44:42] So it's 0.95 minus 7, so plus 25.
+[00:44:50] So I hope this example motivates the fact
+[00:44:54] that we're introducing a new function, which here we
+[00:45:00] call the value function.
+[00:45:03] That is a function that is defined at the token level.
+[00:45:07] So what that function does, so the math
+[00:45:11] formula on the slide, what it says
+[00:45:13] is it tries to determine what is the expected
+[00:45:18] future rewards if you were to start
+[00:45:22] from the input and the partial completion
+[00:45:27] and if you were to continue decoding by sampling
+[00:45:31] from your LLM, by sampling from the policy, what would
+[00:45:35] be the expected value of that?
+[00:45:38] That is your baseline.
+[00:45:40] So in this case, the model is actually
+[00:45:44] trained along with the policy because you need to ask yourself
+[00:45:50] what would be the expected reward if you
+[00:45:52] were to sample from the policy?
+[00:45:55] So you need to leverage the parameters of the policy
+[00:45:59] that you're training.
+[00:46:02] Here, the way you would train such a model
+[00:46:04] is you would try to predict the reward
+[00:46:08] at the end of the completion, given a partial completion along
+[00:46:13] with the prompt.
+[00:46:16] And this quantity would be defined at the token level.
+[00:46:19] So for each token of the output, you would have a value.
+[00:46:25] So this is the value function.
+[00:46:28] And the way you would compute the advantage
+[00:46:32] is by taking the value up to that
+[00:46:37] token and do minus the value up to the token right before.
+[00:46:44] And here you're able to tease out
+[00:46:47] the impact of that token itself.
+[00:46:53] So one thing that I want to say it
+[00:46:56] is actually more complicated than that.
+[00:46:59] So this, that's why it's in quotes.
+[00:47:01] So it's a quote unquote.
+[00:47:03] The reason why it's a little bit more complicated
+[00:47:05] than that is if you were to generate a token,
+[00:47:11] you may increase the likelihood of you getting a high reward,
+[00:47:15] let's say.
+[00:47:17] But you may also put yourself in a position
+[00:47:20] where future tokens would benefit from the token
+[00:47:24] that you generated.
+[00:47:26] So let me give you an example.
+[00:47:29] Let's assume you're teaching a concept to someone.
+[00:47:33] You're teaching it some math concepts.
+[00:47:38] You teaching the concepts may lead to your friends
+[00:47:43] acing the math exam.
+[00:47:45] So that's a short-term reward.
+[00:47:48] But you can also assume that the fact of them succeeding the exam
+[00:47:55] is also placing them on a good path for succeeding later exams
+[00:48:01] and maybe being successful at work
+[00:48:04] and then starting a company, being a CEO,
+[00:48:07] being a billionaire.
+[00:48:08] So you cannot completely attribute you teaching
+[00:48:11] the concept to your friend as being the sole reason for them
+[00:48:15] being successful in the future.
+[00:48:17] But there is some part of it that
+[00:48:19] should be attributed to that.
+[00:48:22] And that is the idea behind the generalized advantage estimation
+[00:48:27] paper, which is not part of the exam.
+[00:48:29] It's not part of the scope of this class.
+[00:48:31] But in case you're interested, feel free to look at it.
+[00:48:36] The idea is to also look at how future values also perform
+[00:48:43] and link that back to a given token.
+[00:48:50] Cool.
+[00:48:51] So, so far, does that make sense?
+[00:48:53] So here what we saw was a way to compute advantages, which
+[00:48:58] are a quantity that tells you how a given token, predicted
+[00:49:04] token is impacting your purpose of getting, let's say,
+[00:49:09] high rewards or getting token level signal?
+[00:49:13] And you also have a sense of a baseline
+[00:49:17] by comparing your value with the value without that given token.
+[00:49:22] Yes?
+[00:49:23] [INAUDIBLE]
+[00:49:25] So the question is, is there any interaction between the value
+[00:49:28] function and the policy?
+[00:49:30] So these two are actually two models.
+[00:49:33] In practice, you train them jointly.
+[00:49:37] So you would have one loss function
+[00:49:39] and have a penalization for the value
+[00:49:42] and the penalization for the actual policy.
+[00:49:47] But in this case, these two are completely disjoint.
+[00:49:50] The value function is not being fed as input anywhere.
+[00:49:57] Yeah?
+[00:49:57] [INAUDIBLE]
+[00:49:58] So the question is the reward model
+[00:50:00] and the value model are both trained.
+[00:50:03] So the reward model is trained beforehand.
+[00:50:05] And the value model is trained at the same time as when
+[00:50:08] you're training your policy.
+[00:50:10] And the main reason why you want to do
+[00:50:12] that this way is because the definition of your value model
+[00:50:17] is to determine the expected rewards
+[00:50:21] if you were to continue according to the policies
+[00:50:24] that you're training.
+[00:50:30] Cool.
+[00:50:32] Yeah?
+[00:50:32] [INAUDIBLE]
+[00:50:34] So the question is value function is a function of theta.
+[00:50:37] So yes, there is a backbone that is shared.
+[00:50:39] And the gradients are determined by your loss function, which
+[00:50:44] contains a value loss function and then
+[00:50:47] a policy, the actual loss function.
+[00:50:52] So in case you're interested in the details,
+[00:50:54] actually the PPO paper does have some technical details.
+[00:50:58] They're interesting to look at.
+[00:51:04] So now what we're saying is we're not
+[00:51:07] trying to optimize the expected value of the rewards.
+[00:51:10] We're trying to optimize the expected value
+[00:51:12] of the advantages.
+[00:51:15] Well, not exactly.
+[00:51:18] So if you remember this, so assuming you
+[00:51:23] can all see the blackboard at the top, we
+[00:51:29] that generating completions were expensive.
+[00:51:35] So do we want to generate completions every time?
+[00:51:37] No.
+[00:51:39] So what you want to do is to leverage completions
+[00:51:45] for multiple updates.
+[00:51:47] And here you can do that by generating
+[00:51:50] a batch using pi theta and then update pi theta
+[00:51:58] on that same batch.
+[00:52:00] And the pi theta would become pi old
+[00:52:01] because it's not the current policy anymore.
+[00:52:06] And so that is the reason why you would see
+[00:52:09] in papers that ratio pop up.
+[00:52:13] So you're not optimizing for expectation of the advantage.
+[00:52:16] You're optimizing for the expectation of the ratio
+[00:52:19] times the advantage.
+[00:52:21] And this is because you want to adjust for the fact
+[00:52:25] that you're actually sampling from the old policy.
+[00:52:28] But you want to make sure that this
+[00:52:30] is corresponding to the current policy.
+[00:52:33] So you have this corrective term,
+[00:52:36] which is the ratio between the current and the old policy.
+[00:52:43] And this is where I want to give a disclaimer.
+[00:52:45] So some papers they note this ratio
+[00:52:48] R. So this can be confusing with respect to the rewards.
+[00:52:51] So here we note this rho, and it is called importance
+[00:52:56] sampling ratio.
+[00:52:59] You have a question?
+[00:53:01] No?
+[00:53:02] OK.
+[00:53:02] Great.
+[00:53:04] So what can happen if you do things this way?
+[00:53:09] Well, you can run into the issue that we discussed previously
+[00:53:14] where you may run into a situation
+[00:53:18] where you're updating your theta such that it deviates too
+[00:53:22] much from previous policies.
+[00:53:25] So what you actually want to do is
+[00:53:27] to have some form of a control over that ratio.
+[00:53:33] And you don't want that ratio to be, let's say, too far from one.
+[00:53:39] So there is a formula for that.
+[00:53:41] And I don't want you to look at the formula right now.
+[00:53:44] I want us to just take a look at it
+[00:53:47] from an intuitive perspective.
+[00:53:50] So here is what I want us to do.
+[00:53:54] So let's assume that we're interested in how
+[00:53:59] much your model is updating the policy.
+[00:54:05] So here we said it's something like the ratio
+[00:54:10] times the advantage.
+[00:54:13] So it's linear as a function of the advantage.
+[00:54:18] So if you were to draw--
+[00:54:21] I'm going to just replicate what we have here--
+[00:54:26] the evolution of this objective function, which I will note J,
+[00:54:31] as a function of the ratio--
+[00:54:36] so if A is positive, so if your advantage is positive,
+[00:54:39] meaning you want your model to increase
+[00:54:41] the probability of a given action from occurring,
+[00:54:46] then you will have something like this.
+[00:54:49] Like, A is positive.
+[00:54:53] Does everyone agree with me?
+[00:54:56] So let's assume here we have 1.
+[00:55:01] So I'm just going to recap.
+[00:55:03] So rho is pi theta over pi old.
+[00:55:09] So 1 means that your current policy and the old policy
+[00:55:15] are saying the same thing.
+[00:55:18] And so if you're here, then what you
+[00:55:21] want to do in order to perform your update is to maximize J.
+[00:55:27] So how do you maximize J?
+[00:55:29] You maximize J by increasing the probability of your policy
+[00:55:35] performing that action.
+[00:55:37] So you would go more somewhere there.
+[00:55:41] You would have your new policy be updated and correspond here.
+[00:55:46] The problem is, if you don't do anything to that expression,
+[00:55:52] the gradient is always nonzero and incentivizing
+[00:55:56] you to increase rho to increase the probability
+[00:56:00] of your policy generating that action more and more.
+[00:56:06] So what you want to do is to break that incentive and clip
+[00:56:14] that function in order for you to have a 0 gradient
+[00:56:19] region where if you were to, let's say,
+[00:56:22] perform an update to your policy and it would become here,
+[00:56:26] you would have no incentive to increase rho.
+[00:56:32] And this is exactly what is on the slides.
+[00:56:36] What we want to do is to clip that function,
+[00:56:40] to remove the incentive from the update
+[00:56:45] to increase the probability of an action being generated.
+[00:56:50] And you want to avoid your policy from increasing
+[00:56:55] that probability even more.
+[00:56:57] So in other words, you don't want your policy
+[00:56:59] to deviate too much from the old policy.
+[00:57:02] So this is when the advantage is positive.
+[00:57:05] Similarly, very similar fashion when it's negative.
+[00:57:09] Here, the objective function will incentivize your model
+[00:57:15] to decrease your ratio, to decrease the probability
+[00:57:18] that your model has from generating an action that
+[00:57:23] leads to negative advantage.
+[00:57:26] So you will have something like this.
+[00:57:28] So if you come back to the formula,
+[00:57:30] this is what the formula is doing.
+[00:57:33] Yes?
+[00:57:33] [INAUDIBLE]
+[00:57:36] So the question is you had introduced the KL divergence.
+[00:57:40] Why don't you use that?
+[00:57:41] Well, it's my next slide.
+[00:57:43] So I will say a little bit about how that works.
+[00:57:46] But this is one way of constraining your model
+[00:57:50] from being updated too much.
+[00:57:53] So to your point, let's go to the KL divergence.
+[00:57:55] So what is the KL divergence doing?
+[00:57:58] So it is an operator that is taking in two probability
+[00:58:02] distributions, let's assume p and q.
+[00:58:06] So here this operator is assuming that p is true,
+[00:58:13] and it is weighting that by log of pi/q.
+[00:58:19] You have also the continuous version, which
+[00:58:22] is just take the integral.
+[00:58:26] So you have a second way of quantifying deviations
+[00:58:29] of your model by saying you actually want a penalization
+[00:58:35] term in your loss function that compares the current policy
+[00:58:42] and some other policy.
+[00:58:45] So here typically what people do is they actually
+[00:58:51] penalize your current policy from being
+[00:58:53] too different from your SFT policy, from your base
+[00:58:56] policy, your reference policy, which
+[00:58:59] is why I want you to pay attention
+[00:59:01] to the subscripts of every pi that you see out there.
+[00:59:05] So here it's pi theta with respect to pi ref.
+[00:59:08] Pi ref is reference, as in the base policy.
+[00:59:12] And this contrasts with pi old, which
+[00:59:16] is the policy that you use to generate the completions.
+[00:59:22] So I'll give you a full story.
+[00:59:24] You start with your pi ref.
+[00:59:27] You train your model, so you generate a batch.
+[00:59:31] This becomes pi old.
+[00:59:32] You perform several updates, and then you generate another batch.
+[00:59:36] This becomes your pi old, several updates.
+[00:59:39] Pi ref stays fixed, and this is what you're comparing
+[00:59:45] your current policy to.
+[00:59:48] And so I want to very quickly mention
+[00:59:54] a scary formula we saw last week,
+[00:59:57] which was the one from DPO.
+[01:00:00] And I'm not sure if you remember,
+[01:00:03] but we had said that there was a supervised way
+[01:00:09] to express the RL objective by using
+[01:00:15] the Bradley-Terry formulation.
+[01:00:18] And what we said was that the objective function was following
+[01:00:23] something that was very much into the line of what
+[01:00:26] the Bradley-Terry was saying, which is something like,
+[01:00:29] so this one is like L minus expectation of log of sigma.
+[01:00:39] And sigma is your sigmoidal which is sigma of, let's say,
+[01:00:44] Rw minus Rl.
+[01:00:48] And we had said that R was defined
+[01:00:52] as beta log of your policy compared to some other policy.
+[01:01:03] And here let's say it's a reference.
+[01:01:05] And we had said that beta was a quantity, some quantity.
+[01:01:11] So I just want to draw a connection here
+[01:01:14] that the beta that you're seeing in the KL
+[01:01:17] divergence, the beta that is actually penalizing
+[01:01:21] for your model being too different from your reference
+[01:01:23] model, is actually the same beta.
+[01:01:27] So the higher the beta, the more you
+[01:01:31] will try to not deviate too much from your reference policy.
+[01:01:36] And I just want to show you mathematically
+[01:01:38] why that is the case intuitively.
+[01:01:41] So sigma, if you were to draw the function,
+[01:01:48] it's something like this.
+[01:01:50] Whoop.
+[01:01:51] Like this.
+[01:01:52] It's like 1 and 0.
+[01:01:55] So sigma of x is 1 over 1 plus exponential of minus x.
+[01:02:04] So when x is 0, it's 0.5.
+[01:02:08] If x goes to plus infinity, this goes to 1.
+[01:02:11] And when x goes to minus infinity, this goes to 0.
+[01:02:17] So there is a region where the sigmoid evolves very quickly.
+[01:02:25] And so we had said that the incentive of your loss
+[01:02:30] is for this difference to be as big as possible.
+[01:02:37] And how do you do that?
+[01:02:39] You want to do Rw as big as possible.
+[01:02:42] And how do you do that?
+[01:02:43] You do that by increasing the probability of your policy
+[01:02:47] generating the winning answer.
+[01:02:51] But if the better that you have is a big beta,
+[01:02:58] then that means that even a slight deviation
+[01:03:02] from the reference policy will make this whole value big.
+[01:03:10] And you will already be in a region
+[01:03:13] where you're already close to 1.
+[01:03:17] So in other words, if you have a big beta,
+[01:03:22] your policy will have a lower incentive
+[01:03:25] to be far from the reference policy.
+[01:03:29] And this contrasts with the lower beta.
+[01:03:32] So if you have a low beta, then you
+[01:03:34] need this quantity to be much higher than this quantity
+[01:03:38] for this to be big.
+[01:03:43] So I'm not sure if that helps.
+[01:03:46] But all that to say, that beta is actually
+[01:03:50] linked to your incentive to want to make
+[01:03:56] this close to the reference policy or not.
+[01:03:59] And this is the same beta that is in the DPO loss.
+[01:04:02] Yes?
+[01:04:02] [INAUDIBLE]
+[01:04:05] So the question is rho t, is it using pi old?
+[01:04:07] Typically, yes.
+[01:04:09] And here it is pi ref.
+[01:04:11] Yes?
+[01:04:11] [INAUDIBLE]
+[01:04:12] So just to confirm there are three policies.
+[01:04:14] Yes, there are three policies.
+[01:04:15] So pi theta is the current policy that you're updating.
+[01:04:19] Pi old is the one that you use to generate the batch.
+[01:04:22] And then pi ref is your base model.
+[01:04:25] Yes, was it the same question?
+[01:04:26] [INAUDIBLE]
+[01:04:28] Yeah, so the question is, if you only
+[01:04:30] care about how a policy deviates from its old value,
+[01:04:34] how do you make sure that it doesn't deviate too
+[01:04:36] much from the reference one?
+[01:04:38] Typically what people do is they have these two
+[01:04:40] constraints simultaneously.
+[01:04:43] They have the clipping of the ratio with respect
+[01:04:46] to the old policy, so the iteration
+[01:04:49] constraints, along with the absolute respect
+[01:04:54] to the reference policy one.
+[01:04:57] So they're both penalizing for deviation with the old policy
+[01:05:02] but also with respect to the absolute base policy.
+[01:05:05] [INAUDIBLE]
+[01:05:08] Yeah?
+[01:05:09] [INAUDIBLE]
+[01:05:10] The question is, how you compute KL?
+[01:05:12] So it's a great question.
+[01:05:13] Because KL is expensive because it's over the whole vocabulary,
+[01:05:16] you have some estimator for that.
+[01:05:17] Yeah.
+[01:05:20] You had a question?
+[01:05:21] No.
+[01:05:22] OK.
+[01:05:22] Great.
+[01:05:23] Let's move on.
+[01:05:26] So if I were to recap what we saw,
+[01:05:28] we saw a way to maximize the quantity that is actually
+[01:05:33] as a function of, let's say, a baseline, which
+[01:05:36] is called advantage.
+[01:05:37] And here we used the value function to do that.
+[01:05:41] And we also mentioned that we had some things in place
+[01:05:46] in order for us to not deviate too much
+[01:05:48] from what we had before.
+[01:05:50] So we saw the clipping mechanism with respect to the old policy,
+[01:05:55] but we also saw the KL penalty term between the current policy
+[01:06:00] and the reference policy.
+[01:06:02] So these are ideas.
+[01:06:04] But some methods they mix both, some methods
+[01:06:07] they use one but not the other.
+[01:06:09] Some methods mix them.
+[01:06:12] There are multiple flavors of it.
+[01:06:13] But I think what is important for you
+[01:06:15] to remember is the different methods
+[01:06:18] that you can use in order to achieve these goals.
+[01:06:23] And I wanted to have a dedicated slide
+[01:06:26] to say if you were to read the PPO paper, please be careful.
+[01:06:30] L is not a loss.
+[01:06:32] It is an objective function.
+[01:06:34] You want to maximize that quantity.
+[01:06:36] You don't want to minimize.
+[01:06:38] And the second one is you will see R for the ratio.
+[01:06:41] Be careful.
+[01:06:42] It is not a reward.
+[01:06:43] It is a ratio.
+[01:06:45] And with that, I will just recap what
+[01:06:48] we saw with respect to the challenges that we mentioned.
+[01:06:52] Gradients being noisy, well, we have a way
+[01:06:55] to compute a baseline, which also turns out to give
+[01:07:01] token-level credit assignments.
+[01:07:03] And we said we could also use either clipping or the KL
+[01:07:08] divergence methods in order to ensure that the policy is not
+[01:07:11] deviating too much from what we had.
+[01:07:16] But the big problem with this approach
+[01:07:19] is that you need to train a value function.
+[01:07:25] That is a lot of hassle.
+[01:07:28] And so this is the reason why this is not the only method
+[01:07:32] we're seeing in, this lecture.
+[01:07:34] There's a second method, which has gained a lot of importance
+[01:07:37] in the past couple of years, which is called GRPO.
+[01:07:42] So GRPO stands for Group Relative Policy Optimization.
+[01:07:48] And what it does is it tries to maximize advantages
+[01:07:54] but without a value function.
+[01:07:58] That is the big added value.
+[01:08:02] But without the value function of GRPO
+[01:08:05] is it doesn't need a value function in order to work,
+[01:08:09] and we're going to see exactly what it does instead.
+[01:08:13] So back to the intuition that we had
+[01:08:17] around having something to compare a reward to,
+[01:08:23] the intuition behind GRPO is given a prompt,
+[01:08:28] you're going to sample multiple responses
+[01:08:31] in order to get that expected value.
+[01:08:36] So you take some prompt.
+[01:08:37] You take a positive temperature.
+[01:08:40] And when you generate several responses,
+[01:08:42] they hopefully are all different.
+[01:08:44] And you will get some responses that are better than others.
+[01:08:47] And if you do that, and if you compute
+[01:08:51] the reward for each of these outputs with respect
+[01:08:54] to the prompts, then if you compare that
+[01:08:59] to the mean of reward and you standardize them,
+[01:09:02] you can get a sense of which response is better to other one
+[01:09:07] with respect to other ones.
+[01:09:09] And you don't need a value function for that.
+[01:09:13] And of course, you also want to not deviate
+[01:09:17] too much from what you had before.
+[01:09:20] So the same tricks apply.
+[01:09:21] So you have the clipping mechanism which is making sure
+[01:09:27] that you don't have nonzero gradients if you're
+[01:09:29] too far from the old policy.
+[01:09:32] And you also have that KL divergence term,
+[01:09:35] which allows you to penalize any deviations from the reference
+[01:09:39] model.
+[01:09:42] So it's a lot of math, a lot of formulas.
+[01:09:45] So let's relax for a second and just walk through
+[01:09:49] that illustration together.
+[01:09:51] So how would we go about updating the weights of our LLM
+[01:09:57] if we were to follow GRPO?
+[01:10:01] So first, we take a prompt and ask
+[01:10:07] our LLM, which is the policy model, to generate responses.
+[01:10:12] So it would generate one output.
+[01:10:14] It will generate two outputs, actually g outputs.
+[01:10:19] And what you want is to know how good these outputs are.
+[01:10:24] So each of these outputs with respect to the input
+[01:10:27] would be evaluated with respect to your reward
+[01:10:31] model, which can be a model or something deterministic.
+[01:10:37] And then you would compute advantage values
+[01:10:41] by subtracting the reward with the mean of the rewards
+[01:10:45] of that group and dividing this with the standard deviation
+[01:10:49] of the rewards.
+[01:10:51] So here you get a relative sense of how each output performs
+[01:10:58] with respect to the group.
+[01:11:01] And what you would do is you would
+[01:11:03] use these advantages in order to compute your gradient.
+[01:11:11] But you would also make sure to penalize
+[01:11:14] for any deviations with respect to your reference model.
+[01:11:17] So you would also have a KL divergence
+[01:11:19] term along with the clipping.
+[01:11:23] And you would not have any value function.
+[01:11:26] No value function needed.
+[01:11:27] You only need your policy model.
+[01:11:29] You need the reward model and a reference model.
+[01:11:32] And by the way, the reward model is optional too.
+[01:11:35] Because if you're doing, let's say,
+[01:11:37] reasoning or math or coding, you can leverage verifiable rewards.
+[01:11:43] OK.
+[01:11:44] So how does that compare with PPO?
+[01:11:48] So PPO, you took some inputs.
+[01:11:53] You put that into your policy model.
+[01:11:54] You generate one response.
+[01:11:57] And what you do is you input that prompt
+[01:12:01] and response into a reward model,
+[01:12:03] tells you how good how well you're doing.
+[01:12:07] There are many variations of how to incorporate the KL penalty.
+[01:12:14] But one of the variations is to incorporate
+[01:12:18] as part of the rewards.
+[01:12:22] So you would do that.
+[01:12:24] And in parallel to that, you would use your value model
+[01:12:29] in order to get a token-level prediction of what
+[01:12:34] is the expected final reward if you were to follow that policy.
+[01:12:39] And you would compute an advantage quantity, which
+[01:12:45] we saw is if we want to be extremely vanilla,
+[01:12:49] it can be the difference between the value functions.
+[01:12:52] But it's actually more complicated than that.
+[01:12:54] And you have a method that does that that
+[01:12:56] is called the Generalized Advantage Estimation, that
+[01:12:59] is called GAE.
+[01:13:02] So you can do that.
+[01:13:04] And then take your advantage and use that
+[01:13:08] in order to compute the gradient that will update your policy.
+[01:13:15] So I want us to--
+[01:13:17] so by the way, does that make sense so far?
+[01:13:22] Yeah?
+[01:13:23] OK.
+[01:13:26] So with that being said, I just want
+[01:13:28] to do a recap of what are the models that are involved
+[01:13:31] and which ones are the ones that we're training versus not.
+[01:13:34] So if you remember, the reference model is fixed.
+[01:13:37] So it's the one that you started from.
+[01:13:40] And you have optionally a reward model,
+[01:13:43] which you train beforehand and that you're leveraging here.
+[01:13:47] You're not training your reward model.
+[01:13:50] But what you're training is obviously your policy model.
+[01:13:55] And in the case of PPO, you're also training a value model.
+[01:14:01] And you're training it jointly with the policy model.
+[01:14:05] Because as we saw, the value model
+[01:14:08] tries to estimate the expected rewards if you
+[01:14:11] were to follow the policy.
+[01:14:14] And you are actually training the policy.
+[01:14:15] So you need to make sure that these two are in sync.
+[01:14:19] And that is the core reason why PPO is a hassle, because you
+[01:14:23] need to have all the bandwidth to host the value model
+[01:14:29] training.
+[01:14:32] And at the end, you obtain these formulas.
+[01:14:34] And I'm glad we didn't start from these formulas,
+[01:14:37] because they can be a little bit intimidating.
+[01:14:41] So something that is similar between the two
+[01:14:44] formulas, the ratios.
+[01:14:46] So here we have the ratio between the probability given
+[01:14:49] by the policy that we're training over
+[01:14:53] the probability of the policy that is the one that generated
+[01:14:56] the batch, so the old policy.
+[01:14:59] That one is the quantity that you see across both formulas.
+[01:15:05] You also see the clipping.
+[01:15:07] And here we saw that the clipping
+[01:15:09] was meant for us to make sure that our policy is not going
+[01:15:15] too far from the old policy.
+[01:15:20] And then we also have a KL divergence term.
+[01:15:23] So I mentioned that there are many variations.
+[01:15:26] In here, GRPO actually expresses the KL divergence
+[01:15:30] in the loss function.
+[01:15:32] But you can very well express it as part of the advantage
+[01:15:35] that you're computing, which is the case of PPO.
+[01:15:43] In terms of the differences, so the previous thing that we saw
+[01:15:48] was one difference, by the way.
+[01:15:49] So where you put the KL penalty is something that
+[01:15:52] can vary from method to method.
+[01:15:55] The second difference is the way you compute the advantage.
+[01:16:01] So in the GRPO case, what you do is you compute the advantage
+[01:16:06] at the completion level, and you compare
+[01:16:10] that with the other outputs.
+[01:16:13] And so by the way, if you look at the GRPO formula,
+[01:16:16] you will see that T denotes the token.
+[01:16:21] And you see that the advantage is a function of the output
+[01:16:25] I and the token T. And you may wonder, well why is there
+[01:16:28] a T if it's at the completion level?
+[01:16:31] You can define the advantage either
+[01:16:33] at the completion level or the token level, which is why there
+[01:16:37] is this more generic formula.
+[01:16:39] But people typically use the completion level 1
+[01:16:42] just because it's easier, because the token level
+[01:16:45] 1 you need to have some way of distinguishing token level
+[01:16:49] contributions, which you're typically not doing.
+[01:16:53] So anyway, going back, you see I and T,
+[01:16:56] but it's actually a function of I for GRPO.
+[01:16:59] So you compute that by comparing your reward with respect
+[01:17:03] to the mean of the rewards of your group,
+[01:17:06] and you divide that by the standard deviation.
+[01:17:09] But for PPO, you're computing the advantage
+[01:17:12] at the token level, and you're using
+[01:17:15] the value function for that.
+[01:17:17] And as a reminder, the value function
+[01:17:19] is also at the token level, and it's trained jointly
+[01:17:23] with the policy.
+[01:17:28] And that's a lot.
+[01:17:29] So I'll just pause for maybe one minute
+[01:17:32] to see if there is any questions on these two big formulas.
+[01:17:37] Now if you see this slide, does that make sense?
+[01:17:43] Yeah?
+[01:17:45] Yeah?
+[01:17:46] [INAUDIBLE]
+[01:17:48] So the question is you added in your previous slide
+[01:17:50] the KL divergence for PPO.
+[01:17:52] Yes, I did, but these were more meant
+[01:17:56] to illustrate two types of strategies to penalize.
+[01:18:01] But in the general PPO implementation,
+[01:18:04] you would actually incorporate that as part of the advantage.
+[01:18:11] And by the way, it's a common thing.
+[01:18:13] Every paper has a different way of implementing this.
+[01:18:16] So don't be surprised.
+[01:18:21] OK.
+[01:18:22] Cool.
+[01:18:23] Well, everyone is good with these big formulas.
+[01:18:25] Great.
+[01:18:26] So let's assume you do that for GRPO.
+[01:18:28] It was actually something that the authors
+[01:18:30] performed on math problems, on reasoning problems.
+[01:18:36] And what they saw was-- so if you remember last week,
+[01:18:39] we said that this was used to incentivize the model
+[01:18:44] to produce chains of reasoning before producing an answer,
+[01:18:48] and it allowed the performance to increase.
+[01:18:51] And one thing that is also something that the authors saw
+[01:18:56] was that the length of the response
+[01:19:00] tended to increase as you were performing the training.
+[01:19:05] And it even tended to increase even
+[01:19:08] when the performance of the model was reaching a plateau.
+[01:19:12] So on the left side, the y-axis is the performance
+[01:19:15] of the model for a math problem.
+[01:19:17] And then on the right side, it is the average response length.
+[01:19:25] And so you may wonder, well, why is that happening?
+[01:19:28] Why would the model incentivize the response
+[01:19:33] from getting longer and longer even when the performance is
+[01:19:37] reaching a plateau?
+[01:19:40] So this has to do with, again, this big formula and how you are
+[01:19:45] performing your normalization.
+[01:19:48] So here I want you to focus on just one piece of the slide.
+[01:19:55] So do you see the 1 over the response of the outputs?
+[01:19:58] Do you see this term?
+[01:20:02] So when responses are short, this term, is it big or small?
+[01:20:09] [INAUDIBLE]
+[01:20:12] Big, yes.
+[01:20:14] So when O is small, 1/O is big.
+[01:20:19] How about when O is big, is small.
+[01:20:22] So this coefficient is actually something
+[01:20:25] that is multiplied with the contribution of a token
+[01:20:30] to the objective function.
+[01:20:32] And here we're saying that if you
+[01:20:34] have a token that happens to be in a short response, then
+[01:20:41] the contribution will be bigger than if it's in a long response.
+[01:20:48] So far, nothing incredible.
+[01:20:50] But now let's assume you are thinking of it in terms
+[01:20:54] of when the advantage is positive versus the advantage
+[01:20:57] is negative.
+[01:20:59] So if you are in a short output, then
+[01:21:04] if your advantage is positive, it
+[01:21:09] will be a big contribution upwards.
+[01:21:13] If you are in a case where it's negative,
+[01:21:17] it will be a big contribution downwards.
+[01:21:21] And if you're in a long output, if it's advantage positive,
+[01:21:24] then it's a slight upward increase.
+[01:21:28] And if you're in a negative advantage output,
+[01:21:30] it's a slight downward contribution.
+[01:21:33] So what does that mean?
+[01:21:35] So if you look at the cases where you're actually
+[01:21:40] outputting bad answers, relatively speaking,
+[01:21:46] the model will prefer a bad answer
+[01:21:49] that is longer compared to a bad answer that is shorter.
+[01:21:56] So if we go back here, what that means is when the model comes
+[01:22:01] to a situation where, OK, it cannot do anything about the bad
+[01:22:04] answers, it just generates bad answers,
+[01:22:08] it will then prefer generating longer,
+[01:22:11] bad answers compared to shorter bad answers.
+[01:22:16] And that is the reason why in this graph,
+[01:22:20] you are seeing a plateau of performance,
+[01:22:23] but the length that is increasing because the model
+[01:22:26] prefers longer bad responses compared to shorter ones.
+[01:22:34] Does everyone agree with this?
+[01:22:37] And so why is this a problem?
+[01:22:39] Well, it's a problem because you don't want that.
+[01:22:42] And that is one of the motivations where
+[01:22:44] there are some papers that follow GRPO that
+[01:22:46] try to tweak some little parts.
+[01:22:49] This included the normalization term.
+[01:22:51] So here, in the case of DAPO, it wanted
+[01:22:55] to have the same contribution for all tokens.
+[01:22:58] So the normalization is with respect
+[01:23:00] to the sum of the outputs.
+[01:23:02] And another one GRPO done right, or Dr. GRPO.
+[01:23:05] I don't know how you would pronounce it,
+[01:23:07] but they would just forego of that normalization term.
+[01:23:12] And I want to talk about other problems that can occur.
+[01:23:16] So the one other that I want to mention
+[01:23:18] is the way the advantages are computed.
+[01:23:22] They are divided by the standard deviation of the rewards.
+[01:23:26] You will have varying standard deviations depending
+[01:23:29] on how complex your input is.
+[01:23:32] And that may introduce a bias.
+[01:23:34] And that's not good.
+[01:23:36] So you may want to remove the standard deviation.
+[01:23:40] And the second one which I wanted
+[01:23:42] to come back to the point around epsilon
+[01:23:46] is that if you have an action that
+[01:23:51] is of a very small probability, and if you
+[01:23:56] use the same epsilon for both the lower
+[01:24:00] bound and the upper bound, you're actually not giving
+[01:24:03] a chance for smaller probability outputs
+[01:24:08] to be generated even significantly more.
+[01:24:11] So let's assume your probability is like,
+[01:24:13] let's say, 0.001 and your epsilon is, I don't know, 0.2,
+[01:24:18] you only are giving a small amount of margin
+[01:24:21] for this to be actually more discovered.
+[01:24:24] And so it is not encouraging diversity.
+[01:24:26] So you may want to choose epsilons
+[01:24:29] that are different for the lower bound and the upper bound.
+[01:24:35] Cool.
+[01:24:35] OK.
+[01:24:36] I wanted to recap.
+[01:24:37] GRPO, we saw that the gradients are less noisy because they're
+[01:24:43] computing advantages with respect to the group average.
+[01:24:47] And we saw that the magnitude of policy updates
+[01:24:51] are also handled by the regular suspects when
+[01:24:54] it comes to the methods, so clipping and KL penalty.
+[01:24:59] But we saw that we didn't have explicit token-level credit
+[01:25:05] assignments, and that's not good.
+[01:25:09] We don't have a value function anymore,
+[01:25:11] but we don't have token-level credit assignments.
+[01:25:14] And we want to solve that.
+[01:25:16] And with that, I'll give it to Shervin.
+[01:25:20] Thank you, Afshin.
+[01:25:22] So to illustrate this point, we're
+[01:25:25] going to go back to our favorite example
+[01:25:27] that we saw earlier in the lecture
+[01:25:29] regarding a Teddy bear that moves within a sealed box.
+[01:25:33] And we're going to recap what GRPO and verifiable rewards
+[01:25:38] incentivize.
+[01:25:40] So here, regardless of the reasoning steps, what matters
+[01:25:44] was only the answer.
+[01:25:47] So why is it a problem?
+[01:25:49] As Afshin mentioned, you are going
+[01:25:51] to miss on the intermediary steps.
+[01:25:55] So here I showed what G completions could give
+[01:25:59] in terms of intermediary steps.
+[01:26:01] So you could have a combination of steps
+[01:26:03] that go both well, steps that go both wrong or just one
+[01:26:07] of the two.
+[01:26:09] And as you can see, every token when you look at the formula
+[01:26:15] is going to be associated to the same end reward.
+[01:26:20] So you're going to attribute the same advantage as the end,
+[01:26:23] even though the step is wrong, which is one downside.
+[01:26:28] And in the longer run, so you might argue,
+[01:26:31] OK, you might have completions for which the intermediary steps
+[01:26:36] don't make sense, but on average they will.
+[01:26:40] And on average, the model will learn exactly
+[01:26:43] which ones are good.
+[01:26:46] But the thing is it's highly inefficient because you see,
+[01:26:50] you're not leveraging what you can leverage at each step.
+[01:26:54] So each of your terms of your loss functions
+[01:26:58] might not be correctly rewarding the right things.
+[01:27:02] So it's noisy locally.
+[01:27:04] And then this phenomenon of learning the correct behavior
+[01:27:07] is one that is based on the long-term.
+[01:27:11] So this is not great.
+[01:27:15] And Afshin just mentioned a few minutes ago
+[01:27:18] that in the GRPO formula you had an advantage that was actually
+[01:27:23] written out as a function of T. So let's just
+[01:27:26] suppose that we're not following the common practice of being
+[01:27:30] based on outcome supervision.
+[01:27:33] Let's say you're on the process supervision methodology,
+[01:27:36] and you do follow that path.
+[01:27:38] Then as we mentioned, you need dedicated
+[01:27:42] labeling for these token-level advantage to make sense.
+[01:27:47] And if you look at the paper, they're
+[01:27:51] slicing it at the step level, which is
+[01:27:53] here, what truly makes sense.
+[01:27:54] So you need to label each of them separately.
+[01:27:59] And you might argue if you go back to each step,
+[01:28:05] that you could similarly have an ambiguity of exactly what goes
+[01:28:09] wrong in that step.
+[01:28:11] So let's say you talk about Teddy who works in the kitchen.
+[01:28:16] Is the issue that Teddy works or that he walks to the kitchen.
+[01:28:21] So it could be a recursive problem down to the token level.
+[01:28:27] So you would be bound to label token at the ends.
+[01:28:31] And a reward on each token might be a hard model to train.
+[01:28:36] And as we mentioned here, one of the reasons why we moved away
+[01:28:41] from PPO in the first place is to avoid
+[01:28:43] maintaining the weights of multiple models to train.
+[01:28:47] So this is not what we want to do.
+[01:28:51] So if I had to recap the benefits that we
+[01:28:54] have in this reinforcement learning stages
+[01:28:57] that we want to keep, so we want on-policy part to stay.
+[01:29:02] So we like to train off of the outputs of the model at stake.
+[01:29:08] Then GRPO had these downside of not
+[01:29:12] crediting each token individually, but rather
+[01:29:15] the overall outcome and hoping for the best on the things
+[01:29:18] that we learn out of it.
+[01:29:20] And we mentioned just now that we do not
+[01:29:23] want to train any additional model to remedy that.
+[01:29:27] So I wrote down a proposal of what we could do to remedy it.
+[01:29:33] So on-policy training is typically us interested
+[01:29:38] in the model's own generation.
+[01:29:40] So that is set.
+[01:29:42] One proposal is to train next token prediction regarding
+[01:29:47] the loss.
+[01:29:48] And for the lack of additional training as a constraint,
+[01:29:54] maybe we could look around at any strong models around there
+[01:29:58] and then see what we could learn from it.
+[01:30:03] So I want to ask you a question.
+[01:30:05] I talked about next token prediction
+[01:30:08] and a model that is stronger than the one at stake.
+[01:30:12] So is there a concept that comes to mind as potentially
+[01:30:16] attractive here?
+[01:30:21] Yep?
+[01:30:22] [INAUDIBLE]
+[01:30:23] Yeah.
+[01:30:24] So yeah the comment is distillation.
+[01:30:25] Yeah, exactly, because distillation
+[01:30:27] is about next token prediction, transfer of information
+[01:30:31] from one model to the other.
+[01:30:33] Yes, spot on.
+[01:30:34] But not the kind that maybe you know.
+[01:30:36] It's a new one.
+[01:30:39] So before we do that, I'm going to do a quick recap on the last
+[01:30:44] that we use to compare distributions
+[01:30:47] of next token predictions, which is the one that we're
+[01:30:49] going to be interested in, so this KL divergence.
+[01:30:53] And I wanted to frame it in very simple terms.
+[01:30:57] So as you know, this loss function is not symmetric.
+[01:31:02] So KL divergence between P and Q is not the same
+[01:31:06] as the one between Q and P. And if you
+[01:31:09] want a way to know instinctively what it means,
+[01:31:16] so you look at the sum, and you see
+[01:31:18] that you sum based on weights of the probability distribution
+[01:31:22] of the first argument.
+[01:31:24] So you're supposing here that the world
+[01:31:27] is governed by that probability distribution.
+[01:31:30] And then you have the sum of logs
+[01:31:33] of ratios that will translate in penalization
+[01:31:39] when the probability weights of the two differ.
+[01:31:45] So the way I propose we interpret this, so KL of P and Q
+[01:31:51] is in a world governed by P. How bad is it to approximate with Q?
+[01:31:57] So typically when you do distillation,
+[01:31:59] you would govern the world with the teacher model.
+[01:32:05] So T would be the first argument,
+[01:32:06] and the student would be the second argument.
+[01:32:09] But here I said we want to do it on policy with respect
+[01:32:13] to the students.
+[01:32:15] So one natural way to formulate this
+[01:32:18] is not to do KL divergence of T and S, but rather the opposite.
+[01:32:24] And this is called the reverse KL divergence.
+[01:32:29] And it has some interesting properties attached to it.
+[01:32:34] So when you look at the sum and you
+[01:32:40] look at the distribution of the student and the teacher,
+[01:32:44] you see that when T is not equal to 0 and if S is close to 0,
+[01:32:52] then the contributions of these terms to the sum
+[01:32:56] are not that big.
+[01:32:58] So we say they are forgiving to these mismatches
+[01:33:02] between these two distributions.
+[01:33:06] But on the other hand, if ti for a given term is small,
+[01:33:13] but SI is nonzero, then you're going
+[01:33:17] to have this ratio that is going to be very big.
+[01:33:21] And that is associated to a weight that is nonzero.
+[01:33:24] So you're going to get a huge term.
+[01:33:29] And these latter points combined with a typical student model's
+[01:33:36] architecture to not have as many degrees of freedom
+[01:33:39] as the teacher one to make it be mode seeking,
+[01:33:43] meaning that the peaks in the distribution of the teacher
+[01:33:45] will be those that will be learned by the students.
+[01:33:51] So these did this make sense here,
+[01:33:56] the fact that we use reverse KL divergence?
+[01:34:01] So I'm asking the question because even though it's
+[01:34:03] what people use today, the original paper
+[01:34:06] did a mix of both.
+[01:34:07] So I think it's not obvious that this is obviously the better
+[01:34:12] one, but--
+[01:34:15] So now let's go back to our favorite example
+[01:34:17] and apply this way of measuring the loss based
+[01:34:21] on the distributions of student and teacher.
+[01:34:24] So here what we want to do in on-policy distillation
+[01:34:27] is that we want the student to generate a completion based
+[01:34:33] on a prompt.
+[01:34:34] And then we ask the teacher based on the standard context,
+[01:34:39] how much does the token generated by the students
+[01:34:42] make sense to you?
+[01:34:43] And we ask this question at each new generated token.
+[01:34:48] So let's say you have this prompt with the problem
+[01:34:51] statement of Teddy in a sealed box.
+[01:34:54] And you ask, where is Teddy?
+[01:34:56] So let's say the sentence starts with Teddy.
+[01:34:59] So Teddy makes sense to the teacher.
+[01:35:01] I would generate also Teddy.
+[01:35:03] But then the student says, Teddy climbs.
+[01:35:06] And the teacher would say, OK, wait.
+[01:35:09] Climbs is not a high-probability token in my distribution.
+[01:35:15] So this is what the teacher would penalize here
+[01:35:18] and what the reverse KL divergence would penalize and so
+[01:35:23] on.
+[01:35:24] Do you see anything that is not being penalized here.
+[01:35:28] And that is a surprise to you in this example?
+[01:35:31] So the things that are penalized in this toy example
+[01:35:33] are things in red.
+[01:35:36] Yeah?
+[01:35:36] [INAUDIBLE]
+[01:35:37] So the suggestion is work.
+[01:35:38] So in O2 why is works not penalized either?
+[01:35:43] So do you have an explanation for it?
+[01:35:45] Or does it make sense that it's not penalized?
+[01:35:48] Yeah?
+[01:35:49] [INAUDIBLE]
+[01:35:51] So yeah, the intuition is great.
+[01:35:54] But the answer was maybe the teacher
+[01:35:56] interprets the Teddy bear as being a human.
+[01:35:59] So as we said, once you generate the next token,
+[01:36:04] all the tokens generated before come into the context.
+[01:36:07] So let's say you are a teacher model.
+[01:36:10] Now in your context that Teddy can do things like climbing.
+[01:36:15] Then walking might be in the span of possibilities.
+[01:36:18] So it's not something that is super surprising.
+[01:36:22] So that is one property that is interesting.
+[01:36:26] And yeah, that's all I had to say here.
+[01:36:31] So when we look at on-policy distillation,
+[01:36:36] we see that we have this supervision signal that is dense
+[01:36:41] because it comes at the token level instead of the outcome
+[01:36:44] level.
+[01:36:45] And contrary to SFT, as the name suggests, on-policy,
+[01:36:52] meaning that you're training the model
+[01:36:54] to be better at with respect to its own completions.
+[01:37:00] And you see in practice great results coming from it.
+[01:37:03] And when you go even further than that,
+[01:37:05] with the same amount of compute, you
+[01:37:08] see that you get more bang out of your buck from this method.
+[01:37:13] And also it is more friendly to parameter constraint situations.
+[01:37:20] So there is this great blog post by Thinking Machine
+[01:37:24] that did some toy ablation studies.
+[01:37:28] And for example, if you play with the rank of the weights
+[01:37:32] that you want to tune and you do SFT
+[01:37:35] first and on-policy distillation next,
+[01:37:38] you see that the delta between the performance that you
+[01:37:42] get after SFT is shortened greatly
+[01:37:47] after you apply on-policy distillation, which
+[01:37:50] shows that the method is great at operating
+[01:37:54] under compute constraints.
+[01:37:59] OK, great.
+[01:38:01] And also, since there is no reward model,
+[01:38:04] there is nothing to hack.
+[01:38:06] And if there was something to hack,
+[01:38:07] it would be more than happy to.
+[01:38:08] Because if on-policy decision wants to bring the loss down
+[01:38:13] to 0, then you would align with the teacher distribution,
+[01:38:16] which is a good edge case.
+[01:38:19] That is great.
+[01:38:21] But then when I mentioned we need a teacher model,
+[01:38:26] then you need to have that in the first place.
+[01:38:28] Let's say you're training a model,
+[01:38:33] then you need to have that.
+[01:38:34] And you're training a frontier model.
+[01:38:35] Maybe you're the best, so there is no one that could teach you.
+[01:38:40] And then the second thing is that contrary to GRPO
+[01:38:46] where the signal that you're basing your updates on
+[01:38:50] is true labels, now you're comparing yourself
+[01:38:54] to a teacher models output distribution.
+[01:38:58] And it might not be perfect, nor might it
+[01:39:01] be complete in terms of coverage on the domains
+[01:39:05] that you're interested in.
+[01:39:06] Which is why it might also come as a limitation.
+[01:39:11] Does that make sense?
+[01:39:15] OK, great.
+[01:39:16] So now I'm going to see each of these limitations
+[01:39:19] more in detail.
+[01:39:20] So do you see a way where we could
+[01:39:22] avoid the need for a teacher?
+[01:39:27] OK, I know it's not obvious, but once you're going to see it,
+[01:39:30] it sounds magical.
+[01:39:31] So you just need to recall that everything
+[01:39:35] that you're inputting for you to obtain the output distributions
+[01:39:40] is done by teacher forcing way.
+[01:39:42] So the figure that Afshin had, I think here
+[01:39:47] between generation and training, you would be on the right side,
+[01:39:52] where once you generate the tokens from your student model,
+[01:39:56] you put all of them, the prompts,
+[01:39:59] plus the tokens from the student model as input of your teacher.
+[01:40:03] And you look at the output next token prediction
+[01:40:06] of your teacher model.
+[01:40:08] So nothing prevents you from injecting things
+[01:40:12] that could help a potential teacher as part of the prompt,
+[01:40:17] including the answer and everything that
+[01:40:20] leads up to the answer.
+[01:40:21] So this is what the self-distillation paper does.
+[01:40:25] So you have a prompt.
+[01:40:27] Then you have the complete answer.
+[01:40:30] And you ask the model to come back with an answer once again.
+[01:40:35] And this is just a trick for you to get this nice probability
+[01:40:39] distributions ready to compare with a student.
+[01:40:42] And the nice thing here is that you can
+[01:40:44] do that with the same model.
+[01:40:49] Does that look magical?
+[01:40:51] Yeah?
+[01:40:52] Yeah, I know, it looks great.
+[01:40:55] OK.
+[01:40:55] So the second thing that we mentioned
+[01:40:57] is the-- oh, yeah, there was a question?
+[01:41:00] [INAUDIBLE]
+[01:41:01] So the question is, if I had to summarize
+[01:41:04] is, when would you benefit most from on-policy distillation?
+[01:41:08] So yeah, you're right that let's say
+[01:41:10] you're the best model out there, maybe
+[01:41:13] you will have a lesser benefit from this method.
+[01:41:17] And maybe you would use on-policy decision
+[01:41:20] for other needs.
+[01:41:23] The GLM 5 paper that we saw last week is one example where
+[01:41:27] you would use it to calibrate the fact that you do not
+[01:41:31] lose knowledge that you have learned in the past,
+[01:41:34] so you would distill yourself on previously gained knowledge.
+[01:41:37] But you're right.
+[01:41:38] You would typically use it on faster models of your series.
+[01:41:46] So let's say you have your frontier lab.
+[01:41:49] You have a pro and a flash model.
+[01:41:50] Maybe on-policy distillation would be what
+[01:41:52] you use on your flash series.
+[01:41:54] And then your pro series might be more foundational
+[01:41:59] GRPO and then these core techniques
+[01:42:02] that might need more compute but that are based off
+[01:42:06] hardcore labels.
+[01:42:09] Thank you.
+[01:42:09] Yep.
+[01:42:10] Awesome.
+[01:42:12] So the last thing that I wanted to mention is on the fact
+[01:42:15] that you might be bounded by the teacher's abilities.
+[01:42:19] So one approach is to take a model
+[01:42:25] and then use these verifiable rewards across domains.
+[01:42:30] And then have experts for each domain.
+[01:42:33] And then when you want to do these on-policy distillation,
+[01:42:36] do it against the expert of that domain.
+[01:42:41] So this is why there is a multi teacher on policy distillation
+[01:42:46] that comes in the picture.
+[01:42:47] So now is it a surprise to anyone
+[01:42:49] that we need multiple teachers here and not just one?
+[01:42:53] Well, empirically if you do these post-training RL on just
+[01:42:58] a single one, you might have things
+[01:43:00] like forgetting that happens and you
+[01:43:03] might use a given set of parameters
+[01:43:06] towards multiple objectives.
+[01:43:08] So this is a method that has shown to be more efficient.
+[01:43:15] OK.
+[01:43:16] Awesome.
+[01:43:16] And with that, I hope you have a great weekend.
+[01:43:18] [APPLAUSE]
