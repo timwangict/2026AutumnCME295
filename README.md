@@ -14,8 +14,12 @@ Stanford **CME 295 Transformers & Large Language Models**（Autumn 2026）自学
 ├── 学习总结/
 │   ├── 第一讲学习总结.md     # Transformers（token/嵌入 → QKV 注意力 → 多头 → 掩码 → 位置编码）
 │   ├── 第二讲学习总结.md     # Large Language Models（BERT vs GPT、RoPE、MHA/MQA/GQA、MoE、解码）
-│   └── 第三讲学习总结.md     # LLM Training（预训练 → 中期训练 → SFT → RLHF/DPO → 推理训练）
-├── 视频转写稿/               # 第 1~3 讲 YouTube 视频的人工字幕转写（纯文本 + 带时间戳）
+│   ├── 第三讲学习总结.md     # LLM Training（预训练 → 中期训练 → SFT → RLHF/DPO → 推理训练）
+│   └── 第四讲学习总结.md     # Reinforcement Learning with LLMs（policy gradient、PPO、GRPO）
+├── 数学基础/
+│   ├── 数学基础从零学起.md   # sin/cos、log、积分、矩阵、概率 从零学起（含推导与例子）
+│   └── 数学基础-全景互动PPT.html  # 配套 8 页互动 PPT
+├── 视频转写稿/               # 第 1~4 讲 YouTube 视频的人工字幕转写（纯文本 + 带时间戳）
 ├── 动手实验/
 │   └── next_word_predictor_slides.html   # 「词 → 向量 → 预测」全流程的可翻页演示
 ├── 参考论文/
@@ -31,6 +35,7 @@ Stanford **CME 295 Transformers & Large Language Models**（Autumn 2026）自学
 | 1 | Transformers | <https://www.youtube.com/watch?v=114i2Kz-LZA> |
 | 2 | Large Language Models | <https://www.youtube.com/watch?v=GaIeu3npx04> |
 | 3 | LLM Training | <https://www.youtube.com/watch?v=S3bCDcJhz4s> |
+| 4 | Reinforcement Learning with LLMs | <https://www.youtube.com/watch?v=3Vaj0Oka_t4> |
 
 ## 说明
 

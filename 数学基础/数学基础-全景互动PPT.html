@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 数学基础：从零学起（全景互动PPT）</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b1120;
+            color: #f1f5f9;
+        }
+        .slide-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navigation Bar -->
+    <header class="w-full px-6 py-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-graduation-cap text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base text-slate-100 tracking-tight">LLM 数学基础：从零学起（全景互动课堂）</h1>
+                <p class="text-xs text-slate-400">零高等数学基础也能读懂 CME295 核心公式与 Transformer 原理</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span id="page-indicator" class="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-900 text-indigo-300 border border-slate-800">
+                第 1 页 / 共 8 页
+            </span>
+            <button onclick="toggleFullscreen()" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs transition border border-slate-800">
+                <i class="fa-solid fa-expand"></i>
+                <span>全屏</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main PPT Container -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6 flex flex-col justify-center relative">
+        <div id="slide-container" class="relative w-full bg-slate-900/90 border border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-md min-h-[580px] flex flex-col justify-between slide-transition">
+            <!-- Slide Content will be dynamically inserted here -->
+        </div>
+    </main>
+
+    <!-- Footer Controls -->
+    <footer class="w-full max-w-6xl mx-auto px-4 py-4 flex items-center justify-between border-t border-slate-800/60 bg-slate-950/40">
+        <button id="prev-btn" onclick="prevSlide()" class="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed shadow-md border border-slate-800">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>上一页</span>
+        </button>
+
+        <!-- Quick Jump Dots -->
+        <div id="dot-indicators" class="hidden lg:flex items-center space-x-2">
+            <!-- Generated dynamically -->
+        </div>
+
+        <button id="next-btn" onclick="nextSlide()" class="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-sm font-medium transition shadow-lg shadow-indigo-600/30 disabled:opacity-40 disabled:cursor-not-allowed">
+            <span>下一页</span>
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
+    </footer>
+
+    <!-- Interactive Logic Script -->
+    <script>
+        const slides = [
+            {
+                title: "开篇：LLM 数学全景地图",
+                subtitle: "学完这五章，大模型核心公式将全部为你敞开",
+                tag: "全局导览",
+                render: () => `
+                    <div class="space-y-4">
+                        <div class="bg-indigo-950/40 border border-indigo-800/50 p-4 rounded-2xl">
+                            <p class="text-xs sm:text-sm text-indigo-200 leading-relaxed">
+                                <strong>核心直觉：</strong>LLM 本质是把文字变成数字（矩阵），用概率（softmax）猜下一个词，用 log/积分去衡量“猜得准不准”并改进，用 sin/cos 给文字排序。
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] font-bold text-pink-400 bg-pink-950/60 px-2.5 py-0.5 rounded-full border border-pink-800/50">sin / cos</span>
+                                    <h3 class="font-bold text-white mt-2 text-sm">画圆、描述“旋转”和“周期”</h3>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800">📍 位置编码 PE、RoPE 旋转</p>
+                            </div>
+                            <div class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-800/50">log 对数</span>
+                                    <h3 class="font-bold text-white mt-2 text-sm">把“乘法”变成“加法”</h3>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800">📍 交叉熵损失防下溢、缩放定律</p>
+                            </div>
+                            <div class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-800/50">积分 ∫ 与期望</span>
+                                    <h3 class="font-bold text-white mt-2 text-sm">“求和”的连续版与加权平均</h3>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800">📍 Policy Gradient 期望奖励 E[R]</p>
+                            </div>
+                            <div class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] font-bold text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded-full border border-cyan-800/50">矩阵计算</span>
+                                    <h3 class="font-bold text-white mt-2 text-sm">一次性算“很多组相乘相加”</h3>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800">📍 词嵌入、Q·Kᵀ 点积注意力</p>
+                            </div>
+                            <div class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between md:col-span-2 lg:col-span-2">
+                                <div>
+                                    <span class="text-[10px] font-bold text-purple-400 bg-purple-950/60 px-2.5 py-0.5 rounded-full border border-purple-800/50">概率分布</span>
+                                    <h3 class="font-bold text-white mt-2 text-sm">描述“有多可能发生”</h3>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800">📍 Softmax 归一化、交叉熵、KL 散度、Sigmoid 奖励模型</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 0 章：读公式的基本功",
+                subtitle: "认识变量、等号、下标、求和符号 Σ 与省略乘号",
+                tag: "第 0 章",
+                render: () => `
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-2">
+                            <span class="text-xs font-bold text-indigo-400">① 变量 (x)</span>
+                            <p class="text-xs text-slate-300">一个“会变的盒子”，里面装了一个数，随时可以换。看到陌生字母不用慌，它只是个数字载体。</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-2">
+                            <span class="text-xs font-bold text-indigo-400">② 下标 (xᵢ)</span>
+                            <p class="text-xs text-slate-300">表示“第几个”。<code class="text-indigo-300">x₁</code> 是第一个，<code class="text-indigo-300">xᵢ</code> 是第 i 个。课程里 Q、K、V 随处可见。</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-2">
+                            <span class="text-xs font-bold text-indigo-400">③ 求和符号 (Σ)</span>
+                            <p class="text-xs text-slate-300">希腊字母西格玛，就是“<strong>把一堆东西全加起来</strong>”的简写：<br><code class="text-pink-300">Σ xᵢ = x₁ + x₂ + ...</code></p>
+                        </div>
+                        <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-2">
+                            <span class="text-xs font-bold text-indigo-400">④ 省略乘号</span>
+                            <p class="text-xs text-slate-300">字母挨着就是相乘：<br><code class="text-pink-300">ab = a × b</code><br><code class="text-pink-300">QKᵀ</code> 里的字母紧挨着也代表矩阵乘法。</p>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 1 章：sin 和 cos（正弦与余弦）",
+                subtitle: "转圈时的横纵坐标与位置编码、RoPE 旋转",
+                tag: "第 1 章",
+                render: () => `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        <div class="lg:col-span-7 space-y-3">
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-pink-400 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>直觉：转圈的横纵坐标</h4>
+                                <p class="text-xs text-slate-300">绕单位圆（半径=1）转动角度 θ 时：<br>• <code class="text-pink-300">cos(θ)</code> = 横坐标（左右位置）<br>• <code class="text-pink-300">sin(θ)</code> = 纵坐标（上下位置）<br>值永远在 [-1, 1] 之间，且具备完美周期性。</p>
+                            </div>
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-indigo-400 mb-1"><i class="fa-solid fa-code mr-2"></i>LLM 用途：位置编码 PE 与 RoPE 旋转</h4>
+                                <p class="text-xs text-slate-300">Transformer 没有序号概念，利用 <code class="text-pink-300">sin/cos</code> 赋予每个词独一无二的位置坐标；RoPE 更通过矩阵旋转把相对位置巧妙嵌入 q 和 k 中。</p>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 flex flex-col items-center">
+                            <p class="text-xs text-slate-400 mb-2 font-medium">交互式单位圆三角函数演示</p>
+                            <div class="relative w-36 h-36 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center bg-slate-900/50">
+                                <div id="circle-point" class="absolute w-3.5 h-3.5 bg-pink-500 rounded-full shadow-lg shadow-pink-500/50 transition-all duration-75"></div>
+                                <div class="absolute inset-0 flex items-center justify-center"><div class="w-full h-[1px] bg-slate-800"></div></div>
+                                <div class="absolute inset-0 flex items-center justify-center"><div class="h-full w-[1px] bg-slate-800"></div></div>
+                            </div>
+                            <div class="w-full mt-3 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-slate-400">角度: <strong id="angle-val" class="text-white">45°</strong></span>
+                                    <span class="text-pink-400">cos: <strong id="cos-val">0.71</strong> | sin: <strong id="sin-val">0.71</strong></span>
+                                </div>
+                                <input type="range" id="angle-slider" min="0" max="360" value="45" class="w-full accent-pink-500 cursor-pointer" oninput="updateTrigDemo(this.value)">
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 2 章：log（对数）与防下溢",
+                subtitle: "乘法变加法：log(x · y) = log(x) + log(y)",
+                tag: "第 2 章",
+                render: () => `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        <div class="lg:col-span-7 space-y-3">
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-amber-400 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>直觉与超能力</h4>
+                                <p class="text-xs text-slate-300"><strong>log 是幂的逆运算。</strong>它的核心超能力是把“<strong>乘法变成加法</strong>”：<br><code class="text-amber-300">log(x · y) = log(x) + log(y)</code><br>小数连续相乘（如 0.5<sup>1000</sup>）极易下溢成 0，而取 log 后变成温和的加法，绝对不会下溢！</p>
+                            </div>
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-indigo-400 mb-1"><i class="fa-solid fa-code mr-2"></i>LLM 用途：交叉熵损失防下溢</h4>
+                                <p class="text-xs text-slate-300">模型预测词概率连乘 <code class="text-pink-300">P = p₁ × p₂...</code> 取 log 后变为累加 <code class="text-pink-300">Σ log(pᵢ)</code>，再加负号得到标准 Loss。</p>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-3">
+                            <h4 class="text-xs font-semibold text-slate-400"><i class="fa-solid fa-calculator mr-2"></i>Log 乘法变加法演示器</h4>
+                            <div class="space-y-2.5 text-xs">
+                                <div>
+                                    <label class="text-slate-400 flex justify-between"><span>数字 x:</span><span id="log-x-text" class="text-amber-300 font-bold">10</span></label>
+                                    <input type="range" min="1" max="100" value="10" class="w-full accent-amber-500 mt-1" oninput="updateLogDemo()" id="log-x-slider">
+                                </div>
+                                <div>
+                                    <label class="text-slate-400 flex justify-between"><span>数字 y:</span><span id="log-y-text" class="text-amber-300 font-bold">100</span></label>
+                                    <input type="range" min="1" max="100" value="100" class="w-full accent-amber-500 mt-1" oninput="updateLogDemo()" id="log-y-slider">
+                                </div>
+                                <div class="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-xs">
+                                    <div class="flex justify-between"><span>x × y:</span> <strong id="res-mul" class="text-white">1000</strong></div>
+                                    <div class="flex justify-between mt-1"><span>log₁₀x + log₁₀y:</span> <strong id="res-log-sum" class="text-amber-400">1 + 2 = 3</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 3 章：积分 ∫ 与期望 E[f(x)]",
+                subtitle: "从离散的骰子求和，到连续的概率积分",
+                tag: "第 3 章",
+                render: () => `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        <div class="lg:col-span-7 space-y-3">
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-emerald-400 mb-1"><i class="fa-solid fa-dice mr-2"></i>离散期望：数豆子与扔骰子</h4>
+                                <p class="text-xs text-slate-300">离散求和 <code class="text-amber-300">E[X] = Σ [点数 × 概率]</code>。例如扔骰子期望：<br><code class="text-slate-200">1×(1/6) + 2×(1/6) + ... + 6×(1/6) = 21/6 = 3.5</code>（长期平均趋势）。</p>
+                            </div>
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-emerald-400 mb-1"><i class="fa-solid fa-integral mr-2"></i>连续期望：积分 ∫ 的登场</h4>
+                                <p class="text-xs text-slate-300">当变量平滑连续时，Σ 升级为积分 ∫。连续期望公式：<br><code class="text-emerald-300">E[f(x)] = ∫ f(x) · p(x) dx</code>（每个值的奖励 × 发生概率密度，全空间加权累加）。</p>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 flex flex-col justify-center space-y-3">
+                            <div class="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs space-y-2">
+                                <span class="text-emerald-450 font-bold block text-emerald-300"><i class="fa-solid fa-circle-info mr-1.5"></i>核心对比直觉</span>
+                                <div class="grid grid-cols-2 gap-2 text-center pt-1">
+                                    <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                                        <span class="text-slate-400 block text-[10px]">离散 (Sum)</span>
+                                        <strong class="text-amber-400 font-mono">Σ 点数 × 概率</strong>
+                                    </div>
+                                    <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                                        <span class="text-slate-400 block text-[10px]">连续 (Integral)</span>
+                                        <strong class="text-emerald-400 font-mono">∫ f(x)p(x)dx</strong>
+                                    </div>
+                                </div>
+                                <p class="text-[10px] text-slate-400 text-center pt-1">LLM 用其计算强化学习中 Policy Gradient 的期望奖励 <code class="text-indigo-300">J(θ) = E[R]</code>。</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 4 章：矩阵计算与注意力 QKᵀ",
+                subtitle: "行 × 列运算法则与词与词的关联方阵",
+                tag: "第 4 章",
+                render: () => `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        <div class="lg:col-span-7 space-y-3">
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-cyan-400 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>核心规则：行 × 列</h4>
+                                <p class="text-xs text-slate-300"><strong>矩阵乘法 = 把很多组“相乘再相加”一次性做完。</strong><br>两个向量的点积衡量“同向程度/相关度”：同向为正，垂直为 0，反向为负。</p>
+                            </div>
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-indigo-400 mb-1"><i class="fa-solid fa-code mr-2"></i>LLM 用途：QKᵀ 注意力矩阵</h4>
+                                <p class="text-xs text-slate-300"><code class="text-cyan-300">scores = Q · Kᵀ</code> 形状为 <code class="text-pink-300">(n×n)</code>，精确记录了整句话中“每个词对其他所有词的关注度（谁看谁、看多重）”。</p>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-3">
+                            <h4 class="text-xs font-semibold text-slate-400"><i class="fa-solid fa-calculator mr-2"></i>向量点积计算演示</h4>
+                            <div class="space-y-2 text-xs">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="text-slate-400 text-[10px]">向量 A [x₁, x₂]:</label>
+                                        <div class="grid grid-cols-2 gap-1 mt-1">
+                                            <input type="number" id="vec-a1" value="1" class="bg-slate-900 border border-slate-800 rounded p-1 text-center text-white" oninput="updateDotProduct()">
+                                            <input type="number" id="vec-a2" value="2" class="bg-slate-900 border border-slate-800 rounded p-1 text-center text-white" oninput="updateDotProduct()">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-slate-400 text-[10px]">向量 B [y₁, y₂]:</label>
+                                        <div class="grid grid-cols-2 gap-1 mt-1">
+                                            <input type="number" id="vec-b1" value="3" class="bg-slate-900 border border-slate-800 rounded p-1 text-center text-white" oninput="updateDotProduct()">
+                                            <input type="number" id="vec-b2" value="4" class="bg-slate-900 border border-slate-800 rounded p-1 text-center text-white" oninput="updateDotProduct()">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-2.5 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                                    <span class="text-slate-400 text-[10px] block">点积结果 (A · B):</span>
+                                    <strong id="dot-result" class="text-cyan-400 text-sm">11</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "第 5 章：概率、Softmax 与交叉熵",
+                subtitle: "归一化、损失衡量、KL 散度与 Sigmoid 奖励",
+                tag: "第 5 章",
+                render: () => `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        <div class="lg:col-span-7 space-y-3">
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-purple-400 mb-1"><i class="fa-solid fa-lightbulb mr-2"></i>Softmax 与交叉熵</h4>
+                                <p class="text-xs text-slate-300">• <strong>Softmax</strong>：利用指数 <code class="text-purple-300">eᶻ</code> 将任意打分变成和为 1 的概率。<br>• <strong>交叉熵 Loss</strong>：<code class="text-pink-300">−log Q(正确词)</code>，正确答案给的概率越高，损失越接近 0。</p>
+                            </div>
+                            <div class="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                                <h4 class="text-xs font-semibold text-indigo-400 mb-1"><i class="fa-solid fa-code mr-2"></i>KL 散度与 Sigmoid</h4>
+                                <p class="text-xs text-slate-300">• <strong>KL 散度</strong>：衡量两个概率分布（如前后模型）差距有多大。<br>• <strong>Sigmoid</strong>：把任意数压到 (0, 1) 区间，用于奖励模型判断胜负概率。</p>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-5 bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-3">
+                            <h4 class="text-xs font-semibold text-slate-400"><i class="fa-solid fa-calculator mr-2"></i>Softmax 模拟器</h4>
+                            <div class="space-y-2.5 text-xs">
+                                <div>
+                                    <label class="text-slate-400 flex justify-between"><span>词 A 打分:</span><span id="score-a" class="text-purple-300 font-bold">1.0</span></label>
+                                    <input type="range" min="-3" max="5" step="0.5" value="1.0" class="w-full accent-purple-500 mt-1" oninput="updateSoftmaxDemo()" id="slider-a">
+                                </div>
+                                <div>
+                                    <label class="text-slate-400 flex justify-between"><span>词 B 打分:</span><span id="score-b" class="text-purple-300 font-bold">2.5</span></label>
+                                    <input type="range" min="-3" max="5" step="0.5" value="2.5" class="w-full accent-purple-500 mt-1" oninput="updateSoftmaxDemo()" id="slider-b">
+                                </div>
+                                <div class="p-2.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-xs">
+                                    <div class="flex justify-between items-center">
+                                        <span>P(A):</span> <strong id="prob-a" class="text-purple-300">18.2%</strong>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span>P(B):</span> <strong id="prob-b" class="text-indigo-300">81.8%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                title: "总结：五章串回课程公式总表",
+                subtitle: "从此告别符号恐惧，轻松读懂 CME295 核心公式",
+                tag: "通关结语",
+                render: () => `
+                    <div class="space-y-3">
+                        <div class="overflow-x-auto max-h-[380px] rounded-xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-950 text-slate-200 sticky top-0 border-b border-slate-800">
+                                    <tr>
+                                        <th class="p-3">课程核心公式</th>
+                                        <th class="p-3">用到的数学工具</th>
+                                        <th class="p-3">直觉翻译</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr class="hover:bg-slate-900/50">
+                                        <td class="p-2.5 font-mono text-indigo-300 font-medium">softmax(QKᵀ/√dₖ)V</td>
+                                        <td class="p-2.5">矩阵乘法 + 概率</td>
+                                        <td class="p-2.5">计算相关度方阵 → 缩放 → 变概率 → 加权求和</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-900/50">
+                                        <td class="p-2.5 font-mono text-pink-300 font-medium">PE(pos,2i) = sin(...)</td>
+                                        <td class="p-2.5">sin / cos</td>
+                                        <td class="p-2.5">利用三角函数周期性为词的位置精准编码</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-900/50">
+                                        <td class="p-2.5 font-mono text-amber-300 font-medium">Loss = −Σ p log q</td>
+                                        <td class="p-2.5">log + 概率</td>
+                                        <td class="p-2.5">交叉熵：正确答案概率越大，损失越接近 0</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-900/50">
+                                        <td class="p-2.5 font-mono text-emerald-300 font-medium">J(θ) = E[R] = ∫ R·p dx</td>
+                                        <td class="p-2.5">积分 / 期望</td>
+                                        <td class="p-2.5">连续空间所有可能回复奖励的加权平均均值</td>
+                                    </tr>
+                                    <tr class="hover:bg-slate-900/50">
+                                        <td class="p-2.5 font-mono text-purple-300 font-medium">KL(P‖Q) = Σ P log(P/Q)</td>
+                                        <td class="p-2.5">log + 概率</td>
+                                        <td class="p-2.5">约束前后模型分布不要跑偏</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `
+            }
+        ];
+
+        let currentSlide = 0;
+        const totalSlides = slides.length;
+
+        function renderSlide() {
+            const container = document.getElementById('slide-container');
+            const indicator = document.getElementById('page-indicator');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const slide = slides[currentSlide];
+
+            container.style.opacity = '0';
+            container.style.transform = 'translateY(10px)';
+
+            setTimeout(() => {
+                container.innerHTML = `
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/60">${slide.tag}</span>
+                            <span class="text-xs text-slate-400 font-mono">${currentSlide + 1} / ${totalSlides}</span>
+                        </div>
+                        <h2 class="text-lg sm:text-xl font-bold text-white tracking-tight mb-1">${slide.title}</h2>
+                        <p class="text-xs sm:text-sm text-slate-400 mb-5">${slide.subtitle}</p>
+                    </div>
+                    <div class="my-auto">
+                        ${slide.render()}
+                    </div>
+                    <div class="mt-5 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                        <span>提示：可以使用键盘左右方向键 ⬅️ ➡️ 快速翻页</span>
+                        <span>LLM 数学基础全景互动课堂</span>
+                    </div>
+                `;
+
+                container.style.opacity = '1';
+                container.style.transform = 'translateY(0)';
+            }, 150);
+
+            indicator.innerText = `第 ${currentSlide + 1} 页 / 共 ${totalSlides} 页`;
+            prevBtn.disabled = currentSlide === 0;
+            nextBtn.disabled = currentSlide === totalSlides - 1;
+
+            updateDots();
+
+            if (currentSlide === 2) updateTrigDemo(document.getElementById('angle-slider')?.value || 45);
+            if (currentSlide === 3) updateLogDemo();
+            if (currentSlide === 5) updateDotProduct();
+            if (currentSlide === 6) updateSoftmaxDemo();
+        }
+
+        function renderDots() {
+            const dotContainer = document.getElementById('dot-indicators');
+            if (!dotContainer) return;
+            dotContainer.innerHTML = '';
+            for (let i = 0; i < totalSlides; i++) {
+                const dot = document.createElement('button');
+                dot.className = `w-2 h-2 rounded-full transition-all ${i === currentSlide ? 'bg-indigo-500 w-5' : 'bg-slate-800 hover:bg-slate-700'}`;
+                dot.onclick = () => { currentSlide = i; renderSlide(); };
+                dotContainer.appendChild(dot);
+            }
+        }
+
+        function updateDots() {
+            const dotContainer = document.getElementById('dot-indicators');
+            if (!dotContainer) return;
+            const dots = dotContainer.children;
+            for (let i = 0; i < dots.length; i++) {
+                dots[i].className = `w-2 h-2 rounded-full transition-all ${i === currentSlide ? 'bg-indigo-500 w-5' : 'bg-slate-800 hover:bg-slate-700'}`;
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlide < totalSlides - 1) { currentSlide++; renderSlide(); }
+        }
+
+        function prevSlide() {
+            if (currentSlide > 0) { currentSlide--; renderSlide(); }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'PageDown') nextSlide();
+            if (e.key === 'ArrowLeft' || e.key === 'PageUp') prevSlide();
+        });
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => console.error(err));
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+
+        function updateTrigDemo(val) {
+            const angleVal = document.getElementById('angle-val');
+            const cosVal = document.getElementById('cos-val');
+            const sinVal = document.getElementById('sin-val');
+            const point = document.getElementById('circle-point');
+            if (!angleVal) return;
+
+            angleVal.innerText = val + '°';
+            const rad = (val * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            cosVal.innerText = cos.toFixed(2);
+            sinVal.innerText = sin.toFixed(2);
+
+            const radius = 54;
+            const x = Math.cos(rad) * radius;
+            const y = -Math.sin(rad) * radius;
+            if (point) point.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        function updateLogDemo() {
+            const x = parseInt(document.getElementById('log-x-slider')?.value || 10);
+            const y = parseInt(document.getElementById('log-y-slider')?.value || 100);
+            if (!document.getElementById('log-x-text')) return;
+
+            document.getElementById('log-x-text').innerText = x;
+            document.getElementById('log-y-text').innerText = y;
+
+            document.getElementById('res-mul').innerText = x * y;
+            document.getElementById('res-log-sum').innerText = `log₁₀(${x}) + log₁₀(${y}) = ${Math.log10(x).toFixed(2)} + ${Math.log10(y).toFixed(2)} = ${(Math.log10(x) + Math.log10(y)).toFixed(2)}`;
+        }
+
+        function updateDotProduct() {
+            const a1 = parseFloat(document.getElementById('vec-a1')?.value) || 0;
+            const a2 = parseFloat(document.getElementById('vec-a2')?.value) || 0;
+            const b1 = parseFloat(document.getElementById('vec-b1')?.value) || 0;
+            const b2 = parseFloat(document.getElementById('vec-b2')?.value) || 0;
+
+            const dot = (a1 * b1) + (a2 * b2);
+            const resEl = document.getElementById('dot-result');
+            if (resEl) resEl.innerText = dot;
+        }
+
+        function updateSoftmaxDemo() {
+            const sA = parseFloat(document.getElementById('slider-a')?.value) || 0;
+            const sB = parseFloat(document.getElementById('slider-b')?.value) || 0;
+            if (!document.getElementById('score-a')) return;
+
+            document.getElementById('score-a').innerText = sA;
+            document.getElementById('score-b').innerText = sB;
+
+            const expA = Math.exp(sA);
+            const expB = Math.exp(sB);
+            const sumExp = expA + expB;
+
+            document.getElementById('prob-a').innerText = ((expA / sumExp) * 100).toFixed(1) + '%';
+            document.getElementById('prob-b').innerText = ((expB / sumExp) * 100).toFixed(1) + '%';
+        }
+
+        window.onload = function() {
+            renderDots();
+            renderSlide();
+        };
+    </script>
+</body>
+</html>
